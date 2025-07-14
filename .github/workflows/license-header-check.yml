@@ -43,7 +43,7 @@ on:
         description: "Regex pattern for files to exclude"
         required: false
         type: string
-        default: "node_modules|.venv|organization-service.yaml|project-service.yaml|acs-service.yaml|user-service.yaml|api.*.compiled.yaml|.vendor-new|.pytest_cache|.idea"
+        default: ".env|.envrc|node_modules|.venv|api.*.compiled.yaml|.vendor*|.pytest_cache|.idea|.vscode|.cursor|.claude|*.lock|*lock.yml"
 
 permissions:
   contents: read
