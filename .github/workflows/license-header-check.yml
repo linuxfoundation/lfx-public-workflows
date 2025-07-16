@@ -13,37 +13,15 @@ on:
         type: string
         default: "Copyright The Linux Foundation"
       include_files:
-        description: "JSON array of file patterns to include"
+        description: "A comma-separated list of additional file patterns to include"
         required: false
         type: string
-        default: |
-          [
-            "*.go",
-            "go.mod",
-            "*.py",
-            "*.html",
-            "*.css",
-            "*.ts",
-            "*.js",
-            "*.scss",
-            "*.sh",
-            "*.bash",
-            "*.ksh",
-            "*.csh",
-            "*.tcsh",
-            "*.fsh",
-            "Makefile",
-            "*.txt",
-            "*.yaml",
-            "*.yml",
-            ".gitignore",
-            "*.sql"
-          ]
+        default: ""
       exclude_pattern:
-        description: "Regex pattern for files to exclude"
+        description: "A comma-separated list of additional patterns to exclude"
         required: false
         type: string
-        default: ".env|.envrc|node_modules|.venv|api.*.compiled.yaml|.vendor*|.pytest_cache|.idea|.vscode|.cursor|.claude|*.lock|*lock.yml"
+        default: ""
 
 permissions:
   contents: read
@@ -66,26 +44,57 @@ jobs:
           # Exits with a 0 if all source files have license headers
           # Exits with a 1 if one or more source files are missing a license header
 
-          # These are the file patterns we should exclude - these are typically transient files not checked into source control
-          exclude_pattern='${{ inputs.exclude_pattern }}'
+          # Include build definitions.
+          filetypes=(Makefile Dockerfile .gitignore .dockerignore)
+          # Include Golang files.
+          filetypes+=("*.go" go.mod)
+          # Include Python files.
+          filetypes+=("*.py")
+          # Include HTML, CSS, JS, TS, SCSS.
+          filetypes+=("*.html" "*.htm" "*.css" "*.ts" "*.js" "*.scss")
+          # Include shell scripts.
+          filetypes+=("*.sh" "*.bash" "*.ksh" "*.csh" "*.tcsh" "*.fsh")
+          # Include text.
+          filetypes+=("*.txt")
+          # Include YAML and TOML files.
+          filetypes+=("*.yaml" "*.yml" "*.toml")
+          # Include SQL scripts and definitions.
+          filetypes+=("*.sql")
 
-          # These are the file patterns we should include
-          # Adjust these filters based on the source files you are interested in checking
-          include_files=($(echo '${{ inputs.include_files }}' | jq -r '.[]'))
+          # Add any files types included in the input
+          if [[ -n "${{ inputs.include_files }}" ]]; then
+            IFS=',' read -ra additional_files <<< "${{ inputs.include_files }}"
+            for file in "${additional_files[@]}"; do
+                filetypes+=("${file}")
+            done
+          fi
 
-          # Compile those into a formatted string to pass into find command
-          include_pattern=""
-          for file in "${include_files[@]}"; do
-              # if include_pattern is not empty, add ` -o`, otherwise add nothing
-              include_pattern+="${include_pattern:+ -o }-name '${file}'"
+          # Exclude code coming from a third-party. Typically these won't be checked into
+          # source control, but occasionally "vendored" code is committed.
+          # Build regex pattern with any `exclude_pattern` input values
+          base_excludes=("node_modules" "vendor")
+
+          if [[ -n "${{ inputs.exclude_pattern }}" ]]; then
+            IFS=',' read -ra additional_excludes <<< "${{ inputs.exclude_pattern }}"
+            # Add user-provided excludes to the base excludes
+            base_excludes+=("${additional_excludes[@]}")
+          fi
+
+          # Build the complete regex pattern by joining all excludes with |
+          exclude_pattern='^(.*/)?('
+          for i in "${!base_excludes[@]}"; do
+            if [[ $i -eq 0 ]]; then
+                exclude_pattern="${exclude_pattern}${base_excludes[$i]}"
+            else
+                exclude_pattern="${exclude_pattern}|${base_excludes[$i]}"
+            fi
           done
+          exclude_pattern="${exclude_pattern})/"
 
           files=()
-          echo "Scanning source code..."
-          # Loads all the filenames into an array
-          files=($(eval "find . -type f \( ${include_pattern} \) -print" | egrep -v "${exclude_pattern}"))
+          while IFS='' read -r line; do files+=("$line"); done < <(git ls-files -c "${filetypes[@]}" | grep -E -v "${exclude_pattern}")
 
-          # This is the copyright line to look for - adjust as necessary
+          # This is the copyright line to look for - adjust as necessary using inputs
           copyright_line="${{ inputs.copyright_line }}"
 
           # Flag to indicate if we were successful or not
