@@ -44,10 +44,6 @@ jobs:
           # Exits with a 0 if all source files have license headers
           # Exits with a 1 if one or more source files are missing a license header
 
-          # Exclude code coming from a third-party. Typically these won't be checked into
-          # source control, but occasionally "vendored" code is committed.
-          exclude_pattern='^(.*/)?(node_modules|vendor)/'
-
           # Include build definitions.
           filetypes=(Makefile Dockerfile .gitignore .dockerignore)
           # Include Golang files.
@@ -73,6 +69,8 @@ jobs:
             done
           fi
 
+          # Exclude code coming from a third-party. Typically these won't be checked into
+          # source control, but occasionally "vendored" code is committed.
           # Build regex pattern with any `exclude_pattern` input values
           if [[ -n "${{ inputs.exclude_pattern }}" ]]; then
             exclude_pattern='^(.*/)?(node_modules|vendor' # unclosed regex so we can append the user's input
