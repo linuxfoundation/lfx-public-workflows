@@ -72,24 +72,29 @@ jobs:
           # Exclude code coming from a third-party. Typically these won't be checked into
           # source control, but occasionally "vendored" code is committed.
           # Build regex pattern with any `exclude_pattern` input values
+          base_excludes=("node_modules" "vendor")
+
           if [[ -n "${{ inputs.exclude_pattern }}" ]]; then
-            exclude_pattern='^(.*/)?(node_modules|vendor' # unclosed regex so we can append the user's input
-
             IFS=',' read -ra additional_excludes <<< "${{ inputs.exclude_pattern }}"
-
-            for pattern in "${additional_excludes[@]}"; do
-              exclude_pattern="${exclude_pattern}|${pattern}"
-            done
-
-            exclude_pattern="${exclude_pattern})/"
-          else
-            exclude_pattern='^(.*/)?(node_modules|vendor)/'
+            # Add user-provided excludes to the base excludes
+            base_excludes+=("${additional_excludes[@]}")
           fi
+
+          # Build the complete regex pattern by joining all excludes with |
+          exclude_pattern='^(.*/)?('
+          for i in "${!base_excludes[@]}"; do
+            if [[ $i -eq 0 ]]; then
+                exclude_pattern="${exclude_pattern}${base_excludes[$i]}"
+            else
+                exclude_pattern="${exclude_pattern}|${base_excludes[$i]}"
+            fi
+          done
+          exclude_pattern="${exclude_pattern})/"
 
           files=()
           while IFS='' read -r line; do files+=("$line"); done < <(git ls-files -c "${filetypes[@]}" | grep -E -v "${exclude_pattern}")
 
-          # This is the copyright line to look for - adjust as necessary
+          # This is the copyright line to look for - adjust as necessary using inputs
           copyright_line="${{ inputs.copyright_line }}"
 
           # Flag to indicate if we were successful or not
