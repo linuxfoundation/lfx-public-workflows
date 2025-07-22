@@ -60,9 +60,13 @@ runs:
         tmpDir="$(mktemp -d)"
         pushd "$tmpDir" >& /dev/null
       
-        curl -sSL 'https://get.helm.sh/helm-v${{ inputs.helm_version }}-linux-amd64.tar.gz' | tar xz
-        cp linux-amd64/helm /usr/local/bin/helm
-      
+        curl -sSL -o helm.tar.gz 'https://get.helm.sh/helm-v${{ inputs.helm_version }}-linux-amd64.tar.gz'
+        curl -sSL -o helm.tar.gz.sha256 'https://get.helm.sh/helm-v${{ inputs.helm_version }}-linux-amd64.tar.gz.sha256'
+        echo "$(cat helm.tar.gz.sha256) helm.tar.gz" | sha256sum --check
+        tar xz -f helm.tar.gz
+        mkdir -p "$HOME/bin"
+        mv linux-amd64/helm "$HOME/bin/helm"
+        export PATH="$HOME/bin:$PATH"
         popd >& /dev/null
         rm -rf "$tmpDir"
     - name: Create Chart path
@@ -70,7 +74,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        CHART_PATH="${{ inputs.path == null && format('{0}/{1}', 'charts', inputs.name) || inputs.path }}"
+        CHART_PATH="${{ !inputs.path && format('{0}/{1}', 'charts', inputs.name) || inputs.path }}"
         echo "result=$CHART_PATH" >> "$GITHUB_OUTPUT"
     - name: Set appVersion in Chart.yaml
       if: inputs.app_version != ''
@@ -82,7 +86,9 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        set +x
         echo '${{ inputs.registry_password }}' | helm registry login -u '${{ inputs.registry_username }}' --password-stdin '${{ inputs.registry }}'
+        set -x
     - name: Package the chart
       shell: bash
       run: |
