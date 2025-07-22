@@ -86,9 +86,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        set +x
         echo '${{ inputs.registry_password }}' | helm registry login -u '${{ inputs.registry_username }}' --password-stdin '${{ inputs.registry }}'
-        set -x
     - name: Package the chart
       shell: bash
       run: |
