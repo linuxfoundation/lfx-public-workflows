@@ -91,7 +91,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        helm package '${{ steps.chart-path.outputs.result }}' --version '${{ inputs.chart_version }}'
+        helm package --dependency-update '${{ steps.chart-path.outputs.result }}' --version '${{ inputs.chart_version }}'
     - name: Push the packaged chart to the registry
       id: result
       shell: bash
