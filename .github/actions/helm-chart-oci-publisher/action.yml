@@ -93,7 +93,7 @@ runs:
         set -euo pipefail
         if [ -f '${{ steps.chart-path.outputs.result }}/Chart.lock' ]; then
           yq -r '.dependencies[] | select(.repository | contains("oci://") == false) | "\(.name) \(.repository)"' \
-            '${{ steps.chart-path.outputs.result }}/Chart.yaml' | xargs -L1 helm repo add
+            '${{ steps.chart-path.outputs.result }}/Chart.yaml' | xargs -L1 helm repo add --force-update
           helm dependency build '${{ steps.chart-path.outputs.result }}'
         fi
         helm package '${{ steps.chart-path.outputs.result }}' --version '${{ inputs.chart_version }}'
