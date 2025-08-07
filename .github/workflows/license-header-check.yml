@@ -72,7 +72,7 @@ jobs:
           # Exclude code coming from a third-party. Typically these won't be checked into
           # source control, but occasionally "vendored" code is committed.
           # Build regex pattern with any `exclude_pattern` input values
-          base_excludes=("node_modules" "vendor")
+          base_excludes=("node_modules" "vendor" ".venv" "organization-service.yaml" "project-service.yaml" "acs-service.yaml" "user-service.yaml" "api.*.compiled.yaml" ".vendor-new" "pytest_cache" ".idea")
 
           if [[ -n "${{ inputs.exclude_pattern }}" ]]; then
             IFS=',' read -ra additional_excludes <<< "${{ inputs.exclude_pattern }}"
