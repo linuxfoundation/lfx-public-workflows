@@ -86,7 +86,7 @@ jobs:
           for i in "${!base_excludes[@]}"; do
             # Escape special regex characters for literal matching
             escaped_exclude=$(printf '%s\n' "${base_excludes[$i]}" | sed 's/[[\.*^$()+?{|]/\\&/g')
-            
+
             if [[ $i -eq 0 ]]; then
                 exclude_pattern="${exclude_pattern}(^|/)${escaped_exclude}(/|$)"
             else
@@ -94,16 +94,6 @@ jobs:
             fi
           done
           exclude_pattern="${exclude_pattern})"
-
-          echo "Excluding files matching pattern: ${exclude_pattern}"
-          
-          # Debug: Show all files before filtering
-          echo "All files found by git ls-files:"
-          git ls-files -c "${filetypes[@]}" | head -20
-          
-          # Debug: Show files after applying exclude pattern
-          echo "Files after applying exclude pattern:"
-          git ls-files -c "${filetypes[@]}" | grep -E -v "${exclude_pattern}"
 
           files=()
           while IFS='' read -r line; do files+=("$line"); done < <(git ls-files -c "${filetypes[@]}" | grep -E -v "${exclude_pattern}")
