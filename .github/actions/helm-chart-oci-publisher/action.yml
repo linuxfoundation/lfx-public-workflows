@@ -91,7 +91,12 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        helm package --dependency-update '${{ steps.chart-path.outputs.result }}' --version '${{ inputs.chart_version }}'
+        if [ -f '${{ steps.chart-path.outputs.result }}/Chart.lock' ]; then
+          yq -r '.dependencies[] | select(.repository | contains("oci://") == false) | "\(.name) \(.repository)"' \
+            '${{ steps.chart-path.outputs.result }}/Chart.yaml' | xargs -L1 helm repo add --force-update
+          helm dependency build '${{ steps.chart-path.outputs.result }}'
+        fi
+        helm package '${{ steps.chart-path.outputs.result }}' --version '${{ inputs.chart_version }}'
     - name: Push the packaged chart to the registry
       id: result
       shell: bash
