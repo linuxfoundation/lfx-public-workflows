@@ -36,6 +36,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Check License Headers
+        env:
+          EXCLUDE_PATTERN_INPUT: ${{ inputs.exclude_pattern }}
+          INCLUDE_FILES_INPUT: ${{ inputs.include_files }}
+          COPYRIGHT_LINE_INPUT: ${{ inputs.copyright_line }}
         run: |
           # Disable exit on error to prevent early termination
           set +e
@@ -62,8 +66,8 @@ jobs:
           filetypes+=("*.sql")
 
           # Add any files types included in the input
-          if [[ -n "${{ inputs.include_files }}" ]]; then
-            IFS=',' read -ra additional_files <<< "${{ inputs.include_files }}"
+          if [[ -n "$INCLUDE_FILES_INPUT" ]]; then
+            IFS=',' read -ra additional_files <<< "$INCLUDE_FILES_INPUT"
             for file in "${additional_files[@]}"; do
                 filetypes+=("${file}")
             done
@@ -74,28 +78,32 @@ jobs:
           # Build regex pattern with any `exclude_pattern` input values
           base_excludes=("node_modules" "vendor")
 
-          if [[ -n "${{ inputs.exclude_pattern }}" ]]; then
-            IFS=',' read -ra additional_excludes <<< "${{ inputs.exclude_pattern }}"
+          if [[ -n "$EXCLUDE_PATTERN_INPUT" ]]; then
+            IFS=',' read -ra additional_excludes <<< "$EXCLUDE_PATTERN_INPUT"
             # Add user-provided excludes to the base excludes
             base_excludes+=("${additional_excludes[@]}")
           fi
 
           # Build the complete regex pattern by joining all excludes with |
-          exclude_pattern='^(.*/)?('
+          # This pattern matches either directories or specific filenames anywhere in the path
+          exclude_pattern='('
           for i in "${!base_excludes[@]}"; do
+            # Escape special regex characters for literal matching
+            escaped_exclude=$(printf '%s\n' "${base_excludes[$i]}" | sed 's/[][\.*^$()+?{|]/\\&/g')
+
             if [[ $i -eq 0 ]]; then
-                exclude_pattern="${exclude_pattern}${base_excludes[$i]}"
+                exclude_pattern="${exclude_pattern}(^|/)${escaped_exclude}(/.*|$)"
             else
-                exclude_pattern="${exclude_pattern}|${base_excludes[$i]}"
+                exclude_pattern="${exclude_pattern}|(^|/)${escaped_exclude}(/.*|$)"
             fi
           done
-          exclude_pattern="${exclude_pattern})/"
+          exclude_pattern="${exclude_pattern})"
 
           files=()
           while IFS='' read -r line; do files+=("$line"); done < <(git ls-files -c "${filetypes[@]}" | grep -E -v "${exclude_pattern}")
 
           # This is the copyright line to look for - adjust as necessary using inputs
-          copyright_line="${{ inputs.copyright_line }}"
+          copyright_line="$COPYRIGHT_LINE_INPUT"
 
           # Flag to indicate if we were successful or not
           missing_license_header=0
