@@ -92,9 +92,9 @@ jobs:
             escaped_exclude=$(printf '%s\n' "${base_excludes[$i]}" | sed 's/[][\.*^$()+?{|]/\\&/g')
 
             if [[ $i -eq 0 ]]; then
-                exclude_pattern="${exclude_pattern}(^|/)${escaped_exclude}(/|$)"
+                exclude_pattern="${exclude_pattern}(^|/)${escaped_exclude}(/.*|$)"
             else
-                exclude_pattern="${exclude_pattern}|(^|/)${escaped_exclude}(/|$)"
+                exclude_pattern="${exclude_pattern}|(^|/)${escaped_exclude}(/.*|$)"
             fi
           done
           exclude_pattern="${exclude_pattern})"
