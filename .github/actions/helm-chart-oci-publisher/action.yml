@@ -76,6 +76,11 @@ runs:
         set -euo pipefail
         CHART_PATH="${{ !inputs.path && format('{0}/{1}', 'charts', inputs.name) || inputs.path }}"
         echo "result=$CHART_PATH" >> "$GITHUB_OUTPUT"
+    - name: Set version in Chart.yaml
+      shell: bash
+      run: |
+        set -euo pipefail
+        yq eval '.version = "${{ inputs.chart_version }}"' -i '${{ steps.chart-path.outputs.result }}/Chart.yaml'
     - name: Set appVersion in Chart.yaml
       if: inputs.app_version != ''
       shell: bash
