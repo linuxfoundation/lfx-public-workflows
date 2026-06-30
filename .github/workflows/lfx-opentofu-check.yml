@@ -1,0 +1,303 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+
+name: OpenTofu Check
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Name of the environment to use"
+        required: true
+        type: string
+      opentofu_workspace:
+        description: "Name of the OpenTofu workspace to use, defaults to environment"
+        required: false
+        default: ""
+        type: string
+      opentofu_variables:
+        description: "Variables to pass to OpenTofu"
+        required: false
+        default: ""
+        type: string
+      opentofu_backend_config:
+        description: "Backend configuration for OpenTofu"
+        required: false
+        default: ""
+        type: string
+      opentofu_plan_label:
+        description: "Label for the OpenTofu plan output, defaults to environment"
+        required: false
+        default: ""
+        type: string
+      opentofu_var_file:
+        description: "List of var file paths, one per line"
+        required: false
+        default: ""
+        type: string
+      opentofu_path:
+        description: "Path to the OpenTofu directory"
+        required: false
+        default: "."
+        type: string
+      oidc_role_arn:
+        description: "ARN of the IAM role to assume with OIDC"
+        required: true
+        default: ""
+        type: string
+      oidc_audience:
+        description: "OIDC audience to authenticate against"
+        required: false
+        default: "sts.amazonaws.com"
+        type: string
+      oidc_region:
+        description: "Default region for AWS client"
+        required: false
+        default: us-east-2
+        type: string
+      trigger_check:
+        description: "Whether to trigger the OpenTofu check job"
+        required: false
+        default: true
+        type: boolean
+      env:
+        description: "Extra environment variables"
+        required: false
+        type: string
+      secrets_manager_keys:
+        description: "List of keys to fetch from AWS Secrets Manager"
+        required: false
+        type: string
+      artifact_name:
+        description: "The artifact name to download"
+        required: false
+        type: string
+      artifact_path:
+        description: "The artifact path to download"
+        required: false
+        type: string
+      cloudflare_setup_warp_client:
+        description: "Setup Cloudflare WARP Client"
+        required: false
+        default: false
+        type: boolean
+      cloudflare_organization:
+        description: "Cloudflare organization"
+        required: false
+        type: string
+      rds_proxy:
+        description: "Start/stop the RDS Proxy"
+        required: false
+        default: false
+        type: boolean
+      disable_incidentio_alert:
+        description: "Disable Incident.io alert creation on drift detection"
+        required: false
+        default: false
+        type: boolean
+      incidentio_alert_token:
+        description: "Incident.io alert token"
+        required: false
+        type: string
+        default: 'INCIDENT_ALERT_TOKEN, /cloudops/managed-secrets/cloud/incidentio/lfx_terraform_api_key'
+      incidentio_alert_source:
+        description: "Incident.io alert source"
+        required: false
+        type: string
+        default: 'INCIDENT_ALERT_SOURCE, /cloudops/managed-secrets/cloud/incidentio/lfx_terraform_alert_source'
+    secrets:
+      env_secret:
+        description: "Extra secret environment variables"
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  opentofu_check:
+    runs-on: ubuntu-latest
+    name: "OpenTofu Check - ${{ inputs.environment }}"
+    if: ${{ inputs.trigger_check }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set Environment Variables
+        id: set-env
+        run: |
+          echo -e '${{ inputs.env }}' >> $GITHUB_ENV
+          for val in $(echo -e '${{ secrets.env_secret }}' | cut -d'=' -f2-); do echo ::add-mask::$val ; done
+          echo -e '${{ secrets.env_secret }}' >> $GITHUB_ENV
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          audience: ${{ inputs.oidc_audience }}
+          role-to-assume: ${{ inputs.oidc_role_arn }}
+          aws-region: ${{ inputs.oidc_region }}
+
+      # This is used to fetch build time secrets from AWS Secrets Manager
+      - name: Read secrets from AWS Secrets Manager into environment variables
+        uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa # v3.0.0
+        if: ${{ inputs.secrets_manager_keys != '' }}
+        with:
+          secret-ids: |
+            ${{ inputs.secrets_manager_keys }}
+            ${{ inputs.incidentio_alert_token }}
+            ${{ inputs.incidentio_alert_source }}
+          name-transformation: none
+
+      # For each env var the match TERRAFORM_HTTP_CREDENTIALS_*, add it to the TERRAFORM_HTTP_CREDENTIALS with a newline
+      - name: Set Terraform HTTP Credentials
+        run: |
+          # Initialize TERRAFORM_HTTP_CREDENTIALS if not set
+          : "${TERRAFORM_HTTP_CREDENTIALS:=""}"
+
+          # Find credential variables
+          credential_vars=$(compgen -A variable | grep '^TERRAFORM_HTTP_CREDENTIALS_' || true)
+
+          if [ -n "$credential_vars" ]; then
+            for var in $credential_vars; do
+              # Validate credential format
+              if [ -z "${!var}" ]; then
+                echo "::error::Empty credential found in $var"
+                exit 1
+              fi
+              TERRAFORM_HTTP_CREDENTIALS="${TERRAFORM_HTTP_CREDENTIALS}${!var}"$'\n'
+            done
+            # Export multi-line environment variable for subsequent steps
+            echo "TERRAFORM_HTTP_CREDENTIALS<<EOF" >> $GITHUB_ENV
+            echo "$TERRAFORM_HTTP_CREDENTIALS" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          else
+            echo "::warning::No TERRAFORM_HTTP_CREDENTIALS_* variables found"
+          fi
+
+      - name: OpenTofu Check
+        id: opentofu-check
+        continue-on-error: true
+        uses: dflook/tofu-check@911a3cb9355a0f21f333b3fb4ec506df6a2e9a52 # v2.2.3
+        with:
+          label: ${{ inputs.opentofu_plan_label || inputs.environment }}
+          workspace: ${{ inputs.opentofu_workspace || inputs.environment }}
+          backend_config: ${{ inputs.opentofu_backend_config }}
+          var_file: ${{ inputs.opentofu_var_file }}
+          path: ${{ inputs.opentofu_path }}
+          variables: |
+            ${{ inputs.opentofu_variables }}
+        env:
+          TERRAFORM_PRE_RUN: |
+            if [ "${{ inputs.rds_proxy }}" = true ]; then
+              set -e
+
+              # Install netcat
+              apt-get update && apt-get install -y netcat-openbsd
+
+              # Install awscli v2
+              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+              unzip awscliv2.zip
+              ./aws/install
+
+              # Install kubectl
+              curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+              chmod +x kubectl
+              mv kubectl /usr/local/bin/
+
+              # Start RDS Proxy
+              echo "Starting RDS proxy"
+              ./scripts/rds-proxy.sh start ${{ inputs.environment }} terraform-deploy-oidc
+
+              sleep 5
+
+              # Check if RDS proxy started
+              echo "Checking if RDS proxy started..."
+              for i in {1..6}; do
+                if nc -z localhost 5432; then
+                  echo "✅ RDS proxy is ready!"
+                  break
+                elif [ $i -eq 6 ]; then
+                  echo "❌ RDS proxy failed to start after 30 seconds"
+                  docker logs rds-proxy
+                  exit 1
+                else
+                  echo "Attempt $i/6: Not ready yet, waiting 5 more seconds..."
+                  sleep 5
+                fi
+              done
+            fi
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ env.AWS_SESSION_TOKEN }}
+
+      - name: Create Incident.io Alert on Drift
+        id: create-alert
+        if: inputs.disable_incidentio_alert == false && steps.opentofu-check.outputs.failure-reason == 'changes-to-apply'
+        run: |
+          echo "OpenTofu check failed - drift detected in ${{ inputs.environment }} for repository ${{ github.repository }}"
+          curl \
+            -X POST \
+            -H 'Authorization: Bearer ${{ env.INCIDENT_ALERT_TOKEN }}' \
+            -H 'Content-Type: application/json' \
+              https://api.incident.io/v2/alert_events/http/${{ env.INCIDENT_ALERT_SOURCE }} \
+            -d '{
+              "title": "${{ github.repository }} Drift Detected",
+              "description": "OpenTofu drift detected in ${{ github.repository }} environment: ${{ inputs.environment }}. View workflow run for details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "deduplication_key": "${{ github.repository }}-drift-${{ inputs.environment }}",
+              "status": "firing"
+            }'
+
+      - name: Create Incident.io Alert on Error
+        id: create-error-alert
+        if: inputs.disable_incidentio_alert == false && steps.opentofu-check.outcome == 'failure' && steps.opentofu-check.outputs.failure-reason != 'changes-to-apply'
+        run: |
+          echo "OpenTofu check failed - error detecting drift in ${{ inputs.environment }} for repository ${{ github.repository }}"
+          curl \
+            -X POST \
+            -H 'Authorization: Bearer ${{ env.INCIDENT_ALERT_TOKEN }}' \
+            -H 'Content-Type: application/json' \
+              https://api.incident.io/v2/alert_events/http/${{ env.INCIDENT_ALERT_SOURCE }} \
+            -d '{
+              "title": "${{ github.repository }} Drift Detection Error",
+              "description": "Error detecting OpenTofu drift in ${{ github.repository }} environment: ${{ inputs.environment }}. View workflow run for details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "deduplication_key": "${{ github.repository }}-drift-${{ inputs.environment }}",
+              "status": "firing"
+            }'
+
+      - name: Check Workflow Status
+        if: always()
+        run: |
+          # Separate print statements if alert creation is disabled
+          if [[ "${{ inputs.disable_incidentio_alert }}" == "true" ]]; then
+            if [[ "${{ steps.opentofu-check.outputs.failure-reason }}" == "changes-to-apply" ]]; then
+              echo "⚠️ Drift detected but Incident.io alert creation is disabled"
+              exit 0
+            elif [[ "${{ steps.opentofu-check.outcome }}" == "success" ]]; then
+              echo "✅ No drift detected"
+              exit 0
+            else
+              echo "❌ Failure to run drift detection"
+              exit 1
+            fi
+          else
+            if [[ "${{ steps.opentofu-check.outputs.failure-reason }}" == "changes-to-apply" && "${{ steps.create-alert.outcome }}" == "success" ]]; then
+              echo "✅ Drift detected and successfully sent to Incident.io"
+              exit 0
+            elif [[ "${{ steps.opentofu-check.outputs.failure-reason }}" == "changes-to-apply" && "${{ steps.create-alert.outcome }}" != "success" ]]; then
+              echo "❌ Drift detected and alert creation failed"
+              exit 1
+            elif [[ "${{ steps.opentofu-check.outcome }}" == "success" ]]; then
+              echo "✅ No drift detected"
+              exit 0
+            elif [[ "${{ steps.opentofu-check.outputs.failure-reason }}" != "changes-to-apply" && "${{ steps.create-error-alert.outcome }}" == "success" ]]; then
+              echo "⚠️ Drift detection error and alert creation succeeded"
+              exit 1
+            elif [[ "${{ steps.opentofu-check.outputs.failure-reason }}" != "changes-to-apply" && "${{ steps.create-error-alert.outcome }}" != "success" ]]; then
+              echo "❌ Drift detection error and alert creation failed"
+              exit 1
+            else
+              echo "❌ Failure to run drift detection"
+              exit 1
+            fi
+          fi
