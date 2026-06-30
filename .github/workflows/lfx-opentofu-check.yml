@@ -75,15 +75,6 @@ on:
         description: "The artifact path to download"
         required: false
         type: string
-      cloudflare_setup_warp_client:
-        description: "Setup Cloudflare WARP Client"
-        required: false
-        default: false
-        type: boolean
-      cloudflare_organization:
-        description: "Cloudflare organization"
-        required: false
-        type: string
       rds_proxy:
         description: "Start/stop the RDS Proxy"
         required: false

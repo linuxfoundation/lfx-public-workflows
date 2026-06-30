@@ -77,15 +77,6 @@ on:
         description: "The artifact path to download"
         required: false
         type: string
-      cloudflare_setup_warp_client:
-        description: "Setup Cloudflare WARP Client"
-        required: false
-        default: false
-        type: boolean
-      cloudflare_organization:
-        description: "Cloudflare organization"
-        required: false
-        type: string
       rds_proxy:
         description: "Start/stop the RDS Proxy"
         required: false
@@ -140,10 +131,6 @@ jobs:
           EOF
           )"
 
-          # Mask individual secrets directly
-          echo "::add-mask::${{ secrets.cloudflare_auth_client_id }}"
-          echo "::add-mask::${{ secrets.cloudflare_auth_client_secret }}"
-
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
@@ -192,16 +179,6 @@ jobs:
         with:
           name: ${{ inputs.artifact_name }}
           path: ${{ inputs.artifact_path || '.' }}
-
-        # Cloudflare WARP client setup if needed
-      - name: "Cloudflare Warp Setup"
-        if: ${{ inputs.cloudflare_setup_warp_client }}
-        uses: Boostport/setup-cloudflare-warp@427fc9c04f371e4e0338701954d495c669ae7885 # v1.17.1
-        with:
-          organization: ${{ inputs.cloudflare_organization }}
-          # Get secrets from environment variables exported by secretsmanager
-          auth_client_id: ${{ env.cloudflare_auth_client_id }}
-          auth_client_secret: ${{ env.cloudflare_auth_client_secret }}
 
       - name: OpenTofu Apply
         uses: dflook/tofu-apply@c254eb5b2e48978c05587373100d26b604c2182d # v2.2.3
