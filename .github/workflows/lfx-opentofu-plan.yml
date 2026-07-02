@@ -1,4 +1,9 @@
+---
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+
 name: OpenTofu Plan
+
 on:
   workflow_call:
     inputs:
