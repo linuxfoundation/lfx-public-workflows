@@ -70,10 +70,10 @@ on:
         description: "Shell commands passed through as TERRAFORM_PRE_RUN to dflook action"
         required: false
         type: string
-      disable_incidentio_alert:
-        description: "Disable Incident.io alert creation on drift detection"
+      enable_incidentio_alert:
+        description: "Enable Incident.io alert creation on drift detection"
         required: false
-        default: false
+        default: true
         type: boolean
       incidentio_alert_token:
         description: "Incident.io alert token Secrets Manager source (ENVVAR, /secret/path)"
@@ -130,7 +130,7 @@ jobs:
       # Skip reading incident secrets if none given or alert is disabled
       - name: Read Incident.io secrets from AWS Secrets Manager into environment variables
         uses: aws-actions/aws-secretsmanager-get-secrets@2cb1a461cbd4865ac4299648312e4704c646cd53 # v3.0.1
-        if: ${{ !inputs.disable_incidentio_alert && (inputs.incidentio_alert_token != '' && inputs.incidentio_alert_source != '') }}
+        if: ${{ inputs.enable_incidentio_alert && (inputs.incidentio_alert_token != '' && inputs.incidentio_alert_source != '') }}
         with:
           secret-ids: |
             ${{ inputs.incidentio_alert_token }}
@@ -183,7 +183,7 @@ jobs:
 
       - name: Create Incident.io Alert on Drift
         id: create-alert
-        if: ${{ !inputs.disable_incidentio_alert && steps.opentofu-check.outputs.failure-reason == 'changes-to-apply' }}
+        if: ${{ inputs.enable_incidentio_alert && steps.opentofu-check.outputs.failure-reason == 'changes-to-apply' }}
         run: |
           echo "OpenTofu check failed - drift detected in ${{ inputs.environment }} for repository ${{ github.repository }}"
           curl \
@@ -200,7 +200,7 @@ jobs:
 
       - name: Create Incident.io Alert on Error
         id: create-error-alert
-        if: ${{ !inputs.disable_incidentio_alert && steps.opentofu-check.outcome == 'failure' && steps.opentofu-check.outputs.failure-reason != 'changes-to-apply' }}
+        if: ${{ inputs.enable_incidentio_alert && steps.opentofu-check.outcome == 'failure' && steps.opentofu-check.outputs.failure-reason != 'changes-to-apply' }}
         run: |
           echo "OpenTofu check failed - error detecting drift in ${{ inputs.environment }} for repository ${{ github.repository }}"
           curl \
@@ -219,7 +219,7 @@ jobs:
         if: always()
         run: |
           # Separate print statements if alert creation is disabled
-          if [[ "${{ inputs.disable_incidentio_alert }}" == "true" ]]; then
+          if [[ "${{ inputs.enable_incidentio_alert }}" == "false" ]]; then
             if [[ "${{ steps.opentofu-check.outputs.failure-reason }}" == "changes-to-apply" ]]; then
               echo "⚠️ Drift detected but Incident.io alert creation is disabled"
               exit 0
