@@ -13,7 +13,7 @@ The public repository for shared workflows for projects under the `linuxfoundati
   Reusable workflows wrapping <https://github.com/dflook/terraform-github-actions> OpenTofu actions with extra setup
   glue for AWS login and secrets handling.
 
-  The standalone `plan` and `apply` workflows are indended for a plan-on-PR/merge-on-apply workflow, `check` is for reoccurring drift detection jobs, and `plan-apply` is for manual triggers outside of the PR process (e.g. for retrying or resolving drift).
+  The standalone `plan` and `apply` workflows are intended for a plan-on-PR/merge-on-apply workflow, `check` is for reoccurring drift detection jobs, and `plan-apply` is for manual triggers outside of the PR process (e.g. for retrying or resolving drift).
 
   Most inputs are shared across all four workflows:
 
