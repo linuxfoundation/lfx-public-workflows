@@ -77,8 +77,8 @@ on:
         description: "The artifact path to download"
         required: false
         type: string
-      rds_proxy:
-        description: "Start/stop the RDS Proxy"
+      pre_run_script:
+        description: "Shell commands passed through as TERRAFORM_PRE_RUN to dflook action"
         required: false
         default: false
         type: boolean
@@ -191,45 +191,7 @@ jobs:
           variables: |
             ${{ inputs.opentofu_variables }}
         env:
-          TERRAFORM_PRE_RUN: |
-            if [ "${{ inputs.rds_proxy }}" = true ]; then
-              set -euo pipefail
-
-              # Install netcat
-              apt-get update && apt-get install -y netcat-openbsd
-
-              # Install awscli v2
-              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-              unzip awscliv2.zip
-              ./aws/install
-
-              # Install kubectl
-              curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-              chmod +x kubectl
-              mv kubectl /usr/local/bin/
-
-              # Start RDS Proxy
-              echo "Starting RDS proxy"
-              ./scripts/rds-proxy.sh start ${{ inputs.environment }} terraform-deploy-oidc
-
-              sleep 5
-
-              # Check if RDS proxy started
-              echo "Checking if RDS proxy started..."
-              for i in {1..6}; do
-                if nc -z localhost 5432; then
-                  echo "✅ RDS proxy is ready!"
-                  break
-                elif [ $i -eq 6 ]; then
-                  echo "❌ RDS proxy failed to start after 30 seconds"
-                  docker logs rds-proxy
-                  exit 1
-                else
-                  echo "Attempt $i/6: Not ready yet, waiting 5 more seconds..."
-                  sleep 5
-                fi
-              done
-            fi
+          TERRAFORM_PRE_RUN: ${{ inputs.pre_run_commands }}
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
           AWS_SESSION_TOKEN: ${{ env.AWS_SESSION_TOKEN }}
