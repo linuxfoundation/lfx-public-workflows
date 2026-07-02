@@ -100,6 +100,7 @@ jobs:
         run: |
           # Add env_secret to environment using heredoc to preserve all characters
           cat <<'EOF' >> $GITHUB_ENV
+          ${{ inputs.env }}
           ${{ secrets.env_secret }}
           EOF
 
