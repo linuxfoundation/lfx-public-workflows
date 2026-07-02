@@ -16,12 +16,10 @@ on:
         description: "A comma-separated list of additional file patterns to include"
         required: false
         type: string
-        default: ""
       exclude_pattern:
         description: "A comma-separated list of additional patterns to exclude"
         required: false
         type: string
-        default: ""
 
 permissions:
   contents: read

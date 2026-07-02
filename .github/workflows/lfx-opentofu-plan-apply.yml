@@ -14,27 +14,22 @@ on:
       opentofu_workspace:
         description: 'Name of the OpenTofu workspace to use, defaults to environment'
         required: false
-        default: ''
         type: string
       opentofu_variables:
         description: 'Variables to pass to OpenTofu'
         required: false
-        default: ''
         type: string
       opentofu_backend_config:
         description: 'Backend configuration for OpenTofu'
         required: false
-        default: ''
         type: string
       opentofu_plan_label:
         description: 'Label for the OpenTofu plan output, defaults to environment'
         required: false
-        default: ''
         type: string
       opentofu_var_file:
         description: 'List of var file paths, one per line'
         required: false
-        default: ''
         type: string
       opentofu_add_github_comment:
         description: 'Add the plan to a GitHub PR'
@@ -49,7 +44,6 @@ on:
       oidc_role_arn:
         description: 'ARN of the IAM role to assume with OIDC'
         required: true
-        default: ''
         type: string
       oidc_audience:
         description: 'OIDC audience to authenticate against'
@@ -61,11 +55,6 @@ on:
         required: false
         default: us-east-2
         type: string
-      trigger_plan:
-        description: 'Whether to trigger the OpenTofu plan job'
-        required: false
-        default: true
-        type: boolean
       env:
         description: 'Extra environment variables'
         required: false
@@ -85,8 +74,7 @@ on:
       pre_run_script:
         description: "Shell commands passed through as TERRAFORM_PRE_RUN to dflook action"
         required: false
-        default: false
-        type: boolean
+        type: string
     secrets:
       env_secret:
         description: 'Extra secret environment variables'
@@ -103,7 +91,6 @@ jobs:
     outputs:
       tf_plan: ${{ steps.tofu-plan.outputs.plan_path }}
     name: "OpenTofu Plan/Apply Plan - ${{ inputs.environment }}"
-    if: ${{ inputs.trigger_plan }}
 
     steps:
       - name: Checkout

@@ -14,32 +14,22 @@ on:
       opentofu_workspace:
         description: 'Name of the OpenTofu workspace to use, defaults to environment'
         required: false
-        default: ''
         type: string
       opentofu_variables:
         description: 'Variables to pass to OpenTofu'
         required: false
-        default: ''
         type: string
       opentofu_backend_config:
         description: 'Backend configuration for OpenTofu'
         required: false
-        default: ''
         type: string
       opentofu_plan_label:
         description: 'Label for the OpenTofu plan output, defaults to environment'
         required: false
-        default: ''
         type: string
       opentofu_var_file:
         description: 'List of var file paths, one per line'
         required: false
-        default: ''
-        type: string
-      opentofu_auto_approve:
-        description: 'Automatically approve and apply plan'
-        required: false
-        default: "false"
         type: string
       opentofu_path:
         description: 'Path to the OpenTofu directory'
@@ -49,7 +39,6 @@ on:
       oidc_role_arn:
         description: 'ARN of the IAM role to assume with OIDC'
         required: true
-        default: ''
         type: string
       oidc_audience:
         description: 'OIDC audience to authenticate against'
@@ -61,11 +50,6 @@ on:
         required: false
         default: us-east-2
         type: string
-      trigger_apply:
-        description: 'Whether to trigger the OpenTofu apply job'
-        required: false
-        default: true
-        type: boolean
       env:
         description: 'Extra environment variables'
         required: false
@@ -85,8 +69,7 @@ on:
       pre_run_script:
         description: "Shell commands passed through as TERRAFORM_PRE_RUN to dflook action"
         required: false
-        default: false
-        type: boolean
+        type: string
     secrets:
       env_secret:
         description: 'Extra secret environment variables'
@@ -102,7 +85,6 @@ jobs:
     runs-on: ubuntu-latest
     name: "OpenTofu Apply - ${{ inputs.environment }}"
     environment: ${{ inputs.environment }}
-    if: ${{ inputs.trigger_apply }}
 
     steps:
       - name: Checkout
@@ -192,7 +174,6 @@ jobs:
           workspace: ${{ inputs.opentofu_workspace || inputs.environment }}
           backend_config: ${{ inputs.opentofu_backend_config }}
           var_file: ${{ inputs.opentofu_var_file }}
-          auto_approve: ${{ inputs.opentofu_auto_approve }}
           path: ${{ inputs.opentofu_path }}
           variables: |
             ${{ inputs.opentofu_variables }}
