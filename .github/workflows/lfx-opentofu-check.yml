@@ -217,6 +217,7 @@ jobs:
         run: |
           echo "OpenTofu check failed - drift detected in ${{ inputs.environment }} for repository ${{ github.repository }}"
           curl \
+            --fail-with-body \
             -X POST \
             -H 'Authorization: Bearer ${{ env.INCIDENT_ALERT_TOKEN }}' \
             -H 'Content-Type: application/json' \
@@ -234,6 +235,7 @@ jobs:
         run: |
           echo "OpenTofu check failed - error detecting drift in ${{ inputs.environment }} for repository ${{ github.repository }}"
           curl \
+            --fail-with-body \
             -X POST \
             -H 'Authorization: Bearer ${{ env.INCIDENT_ALERT_TOKEN }}' \
             -H 'Content-Type: application/json' \
