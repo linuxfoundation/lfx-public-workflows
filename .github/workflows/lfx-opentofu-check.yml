@@ -73,18 +73,18 @@ on:
       enable_incidentio_alert:
         description: "Enable Incident.io alert creation on drift detection"
         required: false
-        default: true
+        default: false
         type: boolean
       incidentio_alert_token:
         description: "Incident.io alert token Secrets Manager source (ENVVAR, /secret/path)"
         required: false
         type: string
-        default: 'INCIDENT_ALERT_TOKEN, /cloudops/managed-secrets/cloud/incidentio/lfx_terraform_api_key'
+        default: ''
       incidentio_alert_source:
         description: "Incident.io alert source Secrets Manager source (ENVVAR, /secret/path)"
         required: false
         type: string
-        default: 'INCIDENT_ALERT_SOURCE, /cloudops/managed-secrets/cloud/incidentio/lfx_terraform_alert_source'
+        default: ''
     secrets:
       env_secret:
         description: "Extra secret environment variables"
