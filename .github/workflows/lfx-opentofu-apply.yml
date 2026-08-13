@@ -70,14 +70,6 @@ on:
         description: "Shell commands passed through as TERRAFORM_PRE_RUN to dflook action"
         required: false
         type: string
-      opentofu_changes:
-        description: |
-          The 'changes' output from a prior lfx-opentofu-plan.yml run for this environment.
-          Set to false to skip this apply (e.g. no-op plan). Defaults to true so callers
-          that don't wire this through keep today's always-apply behavior.
-        required: false
-        default: true
-        type: boolean
     secrets:
       env_secret:
         description: 'Extra secret environment variables'
@@ -91,7 +83,6 @@ permissions:
 jobs:
   opentofu_apply:
     runs-on: ubuntu-latest
-    if: inputs.opentofu_changes == true
     name: "OpenTofu Apply - ${{ inputs.environment }}"
     environment: ${{ inputs.environment }}
 
