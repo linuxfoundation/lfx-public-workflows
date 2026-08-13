@@ -90,6 +90,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tf_plan: ${{ steps.tofu-plan.outputs.plan_path }}
+      changes: ${{ steps.tofu-plan.outputs.changes }}
     name: "OpenTofu Plan/Apply Plan - ${{ inputs.environment }}"
 
     steps:
@@ -208,6 +209,7 @@ jobs:
   opentofu_apply:
     runs-on: ubuntu-latest
     needs: opentofu_plan
+    if: needs.opentofu_plan.outputs.changes == 'true'
     name: "OpenTofu Plan/Apply Apply - ${{ inputs.environment }}"
     environment: ${{ inputs.environment }}
 

@@ -89,6 +89,8 @@ jobs:
   opentofu_plan:
     runs-on: ubuntu-latest
     name: "OpenTofu Plan - ${{ inputs.environment }}"
+    outputs:
+      changes: ${{ steps.tofu-plan.outputs.changes }}
 
     steps:
       - name: Checkout
@@ -174,6 +176,7 @@ jobs:
 
       - name: OpenTofu Plan
         uses: dflook/tofu-plan@3f5dc358343fb58cd60f83b019e810315aa8258f # v2.2.3
+        id: tofu-plan
         with:
           label: ${{ inputs.opentofu_plan_label || inputs.environment }}
           workspace: ${{ inputs.opentofu_workspace || inputs.environment }}
