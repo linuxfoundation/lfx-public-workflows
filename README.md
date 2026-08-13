@@ -43,7 +43,7 @@ The public repository for shared workflows for projects under the `linuxfoundati
   | `opentofu_add_github_comment` | `plan`, `plan-apply` | string  | `true`  | Post the plan output as a comment on the PR               |
   | `enable_incidentio_alert`     | `check`              | boolean | `false` | Enable Incident.io alert creation on drift detection      |
   | `incidentio_alert_token`      | `check`              | string  |         | Incident.io alert token source (as `ENVVAR, /path/in/sm`) |
-  | `incidentio_alert_source`     | `check`              | string  |         | Incident.io alert source (as `ENVVAR, /path/in/sm`) |
+  | `incidentio_alert_source`     | `check`              | string  |         | Incident.io alert source (as `ENVVAR, /path/in/sm`)       |
 
 ## License
 
