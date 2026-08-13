@@ -43,13 +43,7 @@ The public repository for shared workflows for projects under the `linuxfoundati
   | `opentofu_add_github_comment` | `plan`, `plan-apply` | string  | `true`  | Post the plan output as a comment on the PR               |
   | `enable_incidentio_alert`     | `check`              | boolean | `false` | Enable Incident.io alert creation on drift detection      |
   | `incidentio_alert_token`      | `check`              | string  |         | Incident.io alert token source (as `ENVVAR, /path/in/sm`) |
-  | `incidentio_alert_source`     | `check`              | string  |         | Incident.io alert source (as `ENVVAR, /path/in/sm`)       |
-
-  `plan-apply` skips its apply job when the plan job's `changes` output (from the underlying
-  `dflook/tofu-plan` action) is `false`, avoiding a redundant no-op apply. This isn't extended to the
-  standalone `plan`/`apply` split, since those run as separate workflow invocations (often on different
-  triggers, e.g. `pull_request` vs. `push`) with no shared job graph to pass the output through, and
-  `dflook/tofu-apply` doesn't expose a pre-apply "no changes" signal of its own.
+  | `incidentio_alert_source`     | `check`              | string  |         | Incident.io alert source (as `ENVVAR, /path/in/sm`) |
 
 ## License
 
