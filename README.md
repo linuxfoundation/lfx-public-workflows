@@ -41,7 +41,7 @@ The public repository for shared workflows for projects under the `linuxfoundati
   | Input                         | Applies to           | Type    | Default | Description                                               |
   | ----------------------------- | -------------------- | ------- | ------- | --------------------------------------------------------- |
   | `opentofu_add_github_comment` | `plan`, `plan-apply` | string  | `true`  | Post the plan output as a comment on the PR               |
-  | `opentofu_changes`            | `apply`              | string  | `true`  | Set to `false` to skip applying (e.g. a no-op plan)        |
+  | `opentofu_changes`            | `apply`              | boolean | `true`  | Set to `false` to skip applying (e.g. a no-op plan)        |
   | `enable_incidentio_alert`     | `check`              | boolean | `false` | Enable Incident.io alert creation on drift detection      |
   | `incidentio_alert_token`      | `check`              | string  |         | Incident.io alert token source (as `ENVVAR, /path/in/sm`) |
   | `incidentio_alert_source`     | `check`              | string  |         | Incident.io alert source (as `ENVVAR, /path/in/sm`)       |
