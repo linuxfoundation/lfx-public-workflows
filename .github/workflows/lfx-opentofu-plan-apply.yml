@@ -79,6 +79,10 @@ on:
       env_secret:
         description: 'Extra secret environment variables'
         required: false
+    outputs:
+      changes:
+        description: "'true' if the plan has changes to apply, 'false' otherwise"
+        value: ${{ jobs.opentofu_plan.outputs.changes }}
 
 permissions:
   id-token: write
