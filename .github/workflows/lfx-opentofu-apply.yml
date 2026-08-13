@@ -91,7 +91,7 @@ permissions:
 jobs:
   opentofu_apply:
     runs-on: ubuntu-latest
-    if: inputs.opentofu_changes != 'false'
+    if: inputs.opentofu_changes == 'true'
     name: "OpenTofu Apply - ${{ inputs.environment }}"
     environment: ${{ inputs.environment }}
 
