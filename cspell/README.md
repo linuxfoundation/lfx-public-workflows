@@ -1,6 +1,6 @@
 # Shared cspell flagWords
 
-`flagwords.snippet.json` is the canonical, org-wide list of cspell
+`flagwords.json.snippet` is the canonical, org-wide list of cspell
 [`flagWords`](https://cspell.org/configuration/dictionaries/#flagwords)
 for LFX repos: terms we want cspell to actively reject (usually
 non-inclusive language, per the guidance at
@@ -12,6 +12,13 @@ Rather than copy-pasting and drifting this list across every repo's
 `.cspell.json`, repos pull it in at MegaLinter run time via
 `SPELL_CSPELL_PRE_COMMANDS`, and keep only repo-specific `words` /
 `dictionaries` / `ignorePaths` locally.
+
+The file is deliberately named `flagwords.json.snippet` rather than
+`flagwords.snippet.json`: it's a `"flagWords": [...],` fragment, not a
+complete JSON document, so a `.json` extension would make tooling
+(editors, linters) treat it as JSON and flag it as invalid. The
+`.json.snippet` extension keeps the content's origin clear while
+excluding it from JSON validation.
 
 ## Repo setup
 
@@ -39,9 +46,9 @@ Rather than copy-pasting and drifting this list across every repo's
      - command: >-
          cp .cspell.json /tmp/cspell.json.orig &&
          curl -sSf
-         https://raw.githubusercontent.com/linuxfoundation/lfx-public-workflows/main/cspell/flagwords.snippet.json
-         -o /tmp/flagwords.snippet.json &&
-         sed -i -e '/"flagWords": \[\]/{r /tmp/flagwords.snippet.json' -e 'd}' .cspell.json
+         https://raw.githubusercontent.com/linuxfoundation/lfx-public-workflows/main/cspell/flagwords.json.snippet
+         -o /tmp/flagwords.json.snippet &&
+         sed -i -e '/"flagWords": \[\]/{r /tmp/flagwords.json.snippet' -e 'd}' .cspell.json
        cwd: "workspace"
        continue_if_failed: false
    SPELL_CSPELL_POST_COMMANDS:
@@ -83,7 +90,7 @@ Rather than copy-pasting and drifting this list across every repo's
 
 ## Updating the shared list
 
-Edit `flagwords.snippet.json` directly (keep it a single
+Edit `flagwords.json.snippet` directly (keep it a single
 `"flagWords": [...],` JSON fragment, not a full JSON document, so it drops in as-is).
 Changes take effect on every consuming repo's next MegaLinter run
 automatically, no per-repo update required.
