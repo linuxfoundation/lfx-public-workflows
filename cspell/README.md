@@ -51,8 +51,8 @@ Rather than copy-pasting and drifting this list across every repo's
 
 ## Updating the shared list
 
-Edit `flagwords.snippet.json` directly (keep it a single `"flagWords":
-[...]," ` JSON fragment, not a full JSON document, so it drops in as-is).
+Edit `flagwords.snippet.json` directly (keep it a single
+`"flagWords": [...],` JSON fragment, not a full JSON document, so it drops in as-is).
 Changes take effect on every consuming repo's next MegaLinter run
 automatically, no per-repo update required.
 
