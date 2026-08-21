@@ -3,8 +3,10 @@
 `flagwords.snippet.json` is the canonical, org-wide list of cspell
 [`flagWords`](https://cspell.org/configuration/dictionaries/#flagwords)
 for LFX repos: terms we want cspell to actively reject (usually
-non-inclusive language), each paired with a recommended replacement
-(e.g. `"master: controller, primary, main, leader, parent"`).
+non-inclusive language, per the guidance at
+[inclusivenaming.org](https://inclusivenaming.org/)), each paired with
+a recommended replacement (e.g. `"master: controller, primary, main,
+leader, parent"`).
 
 Rather than copy-pasting and drifting this list across every repo's
 `.cspell.json`, repos pull it in at MegaLinter run time via
@@ -53,3 +55,7 @@ Edit `flagwords.snippet.json` directly (keep it a single `"flagWords":
 [...]," ` JSON fragment, not a full JSON document, so it drops in as-is).
 Changes take effect on every consuming repo's next MegaLinter run
 automatically, no per-repo update required.
+
+For guidance on which terms to flag and what to recommend instead, see
+[inclusivenaming.org](https://inclusivenaming.org/)'s word list and
+definitions.
