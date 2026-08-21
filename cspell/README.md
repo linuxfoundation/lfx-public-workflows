@@ -48,8 +48,8 @@ excluding it from JSON validation.
          curl -sSf
          https://raw.githubusercontent.com/linuxfoundation/lfx-public-workflows/main/cspell/flagwords.json.snippet
          -o /tmp/flagwords.json.snippet &&
-         test "$(grep -c '"flagWords": \[\]' .cspell.json)" -eq 1 &&
-         sed -i -e '/"flagWords": \[\]/{r /tmp/flagwords.json.snippet' -e 'd}' .cspell.json
+        test "$(grep -c '^[[:space:]]*"flagWords"[[:space:]]*:[[:space:]]*\[\],[[:space:]]*$' .cspell.json)" -eq 1 &&
+        sed -i -e '/^[[:space:]]*"flagWords"[[:space:]]*:[[:space:]]*\[\],[[:space:]]*$/{r /tmp/flagwords.json.snippet' -e 'd}' .cspell.json
        cwd: "workspace"
        continue_if_failed: false
    SPELL_CSPELL_POST_COMMANDS:
