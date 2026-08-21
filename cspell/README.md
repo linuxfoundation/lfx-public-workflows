@@ -48,6 +48,7 @@ excluding it from JSON validation.
          curl -sSf
          https://raw.githubusercontent.com/linuxfoundation/lfx-public-workflows/main/cspell/flagwords.json.snippet
          -o /tmp/flagwords.json.snippet &&
+         test "$(grep -c '"flagWords": \[\]' .cspell.json)" -eq 1 &&
          sed -i -e '/"flagWords": \[\]/{r /tmp/flagwords.json.snippet' -e 'd}' .cspell.json
        cwd: "workspace"
        continue_if_failed: false
@@ -62,7 +63,15 @@ excluding it from JSON validation.
    line and replaces it with the fetched snippet's contents, which
    already includes the `"flagWords": [...],` key/value plus trailing
    comma. Both `curl` and `sed` are present in MegaLinter's Docker
-   images out of the box, so no extra `apk add` step is needed.
+   images out of the box, so no extra `apk add` step is needed. The
+   `test "$(grep -c ...)" -eq 1` guard runs before the `sed` and fails
+   the command if the placeholder line is missing, duplicated, or
+   already substituted (e.g. from a prior local run whose restore step
+   didn't run): `sed`'s address-based `{...}` block otherwise exits
+   successfully even when it matches zero (or more than one) lines, so
+   without this check a missing/reformatted placeholder would silently
+   leave `flagWords: []` in place and let cspell run with the shared
+   policy disabled, despite `continue_if_failed: false`.
 
    `continue_if_failed: false` and `curl -sSf` (rather than the default
    `-sf`) are both deliberate: MegaLinter's `PRE_COMMANDS` default to
