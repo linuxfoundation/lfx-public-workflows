@@ -45,8 +45,8 @@ excluding it from JSON validation.
    SPELL_CSPELL_PRE_COMMANDS:
      - command: >-
          cp .cspell.json /tmp/cspell.json.orig &&
-         curl -sSf
-         https://raw.githubusercontent.com/linuxfoundation/lfx-public-workflows/main/cspell/flagwords.json.snippet
+         curl -sSf --connect-timeout 5 --max-time 15
+         https://raw.githubusercontent.com/linuxfoundation/lfx-public-workflows/<pinned-sha>/cspell/flagwords.json.snippet
          -o /tmp/flagwords.json.snippet &&
          test "$(grep -c '^[[:space:]]*"flagWords"[[:space:]]*:[[:space:]]*\[\],[[:space:]]*$' .cspell.json)" -eq 1 &&
          sed -i -e '/^[[:space:]]*"flagWords"[[:space:]]*:[[:space:]]*\[\],[[:space:]]*$/{r /tmp/flagwords.json.snippet' -e 'd}' .cspell.json
@@ -56,6 +56,21 @@ excluding it from JSON validation.
      - command: cp /tmp/cspell.json.orig .cspell.json
        cwd: "workspace"
    ```
+
+   Pin `<pinned-sha>` to a specific commit SHA (or tagged release SHA,
+   e.g. the `v0.1.0` tag SHA) rather than `main`: `main` is a mutable
+   ref, so fetching it lets an upstream change (or compromise of this
+   repo) silently alter the CSpell configuration used by every
+   consuming repo's MegaLinter run on their next CI trigger, with no
+   corresponding PR/diff in the consuming repo to review.
+
+   `--connect-timeout 5 --max-time 15` is also deliberate: MegaLinter's
+   `PRE_COMMANDS` have no built-in per-command timeout (see
+   [MegaLinter's PRE_COMMANDS docs](https://megalinter.io/latest/config-precommands/)),
+   so a stalled or unreachable endpoint would otherwise hang the fetch
+   until the outer CI job's own timeout is reached, wasting significant
+   CI time on every run for what should fail fast.
+
 
    This is a plain line-for-line text substitution (no `jq`/`python`
    JSON tooling required, since neither `jq` nor `yq` is present in
@@ -101,8 +116,10 @@ excluding it from JSON validation.
 
 Edit `flagwords.json.snippet` directly (keep it a single
 `"flagWords": [...],` JSON fragment, not a full JSON document, so it drops in as-is).
-Changes take effect on every consuming repo's next MegaLinter run
-automatically, no per-repo update required.
+Since consuming repos should pin their fetch to a specific commit SHA
+(see above) rather than `main`, changes to this file do **not** take
+effect automatically -- each consuming repo needs a follow-up PR
+bumping its pinned SHA to pick up the update.
 
 For guidance on which terms to flag and what to recommend instead, see
 [inclusivenaming.org](https://inclusivenaming.org/)'s word list and
