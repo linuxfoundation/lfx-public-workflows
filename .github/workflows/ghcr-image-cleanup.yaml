@@ -146,8 +146,9 @@ jobs:
       # carrying the preview label and appends per-PR protective filters so
       # live previews are not deleted while their PR is still open. Requires
       # the caller to have granted pull-requests: read. gh output is captured
-      # in a variable so set -e aborts on API/auth failure; --limit avoids the
-      # default 30-result cap.
+      # in a variable so set -e aborts on API/auth failure; gh api --paginate
+      # walks every page so no labeled PR is dropped by a result cap, and the
+      # label is matched via jq env (no interpolation into the query).
       - name: Build active preview tag filters
         id: preview-tags
         if: ${{ inputs.enable-preview-protection }}
@@ -160,13 +161,9 @@ jobs:
           set -euo pipefail
           filters="${BASE_TAGS}"
           preview_prs="$(
-            gh pr list \
-              --repo "${GITHUB_REPOSITORY}" \
-              --state open \
-              --label "${PREVIEW_LABEL}" \
-              --limit 1000 \
-              --json number \
-              --jq '.[].number'
+            gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" \
+              --jq '.[] | select(any(.labels[].name; . == env.PREVIEW_LABEL)) | .number'
           )"
           while IFS= read -r pr_number; do
             [[ -n "$pr_number" ]] || continue
