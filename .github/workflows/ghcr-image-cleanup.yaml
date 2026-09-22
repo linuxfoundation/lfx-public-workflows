@@ -198,7 +198,11 @@ jobs:
       # Invoked with `docker run` rather than `uses: docker://...` so stdout can
       # be teed for the summary step. Every CLI flag is env-bound. tag-selection
       # =both covers tagged and untagged versions; --shas-to-skip is required by
-      # the CLI parser even when empty. IMAGE_TAGS uses the preview-tags job's
+      # the CLI parser even when empty. GITHUB_REPOSITORY_OWNER is forwarded
+      # because the tool reads it to resolve the owner when account: user
+      # (personal accounts); without it, multi-arch child protection degrades to
+      # a coarse untagged-only safety fallback. It is ignored for org accounts.
+      # IMAGE_TAGS uses the preview-tags job's
       # augmented filter set when preview protection is on, otherwise the base
       # input.
       # DRY_RUN: scheduled runs force delete; other triggers honor the input
@@ -219,6 +223,7 @@ jobs:
           docker pull "$CLEANUP_IMAGE"
           docker run --rm \
             -e RUST_LOG \
+            -e GITHUB_REPOSITORY_OWNER \
             "$CLEANUP_IMAGE" \
             --account="$ACCOUNT" \
             --image-names="$IMAGE_NAME" \
