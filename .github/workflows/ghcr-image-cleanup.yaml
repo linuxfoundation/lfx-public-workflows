@@ -134,14 +134,16 @@ jobs:
   cleanup:
     name: Cleanup Stale Container Images
     needs: [preview-tags]
-    # Run after preview discovery. Allowlist result states so cleanup proceeds
-    # only when discovery SUCCEEDED (preview protection on) or was SKIPPED
-    # (preview protection off). Any other state (failure, cancelled, or any
+    # Run after preview discovery. Gate with !cancelled() (not always()) so a
+    # skipped preview-tags dependency still lets cleanup run, while a run being
+    # cancelled does NOT launch this destructive deletion job (always() keeps
+    # jobs running through cancellation; !cancelled() does not). The allowlist
+    # then restricts cleanup to a SUCCEEDED discovery (preview protection on) or
+    # a SKIPPED one (preview protection off); any other state (failure or any
     # unexpected result) skips cleanup, so previews are never deleted without
-    # their protective filters. always() is required so a skipped dependency
-    # does not skip cleanup by default.
+    # their protective filters.
     if: >-
-      ${{ always()
+      ${{ !cancelled()
           && (needs.preview-tags.result == 'success'
               || needs.preview-tags.result == 'skipped') }}
     runs-on: ubuntu-latest
