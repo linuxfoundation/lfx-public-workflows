@@ -153,11 +153,11 @@ jobs:
       would-delete-count: ${{ steps.summary.outputs.would-delete-count }}
       failed-count: ${{ steps.summary.outputs.failed-count }}
     env:
-      # v3.1.0, pinned by digest (not the `@<sha>` action alias, which only
-      # pins action metadata while still executing whatever container tag that
-      # metadata points at) since this container holds a token capable of
-      # deleting packages.
-      CLEANUP_IMAGE: ghcr.io/snok/container-retention-policy@sha256:884037f146d6ef574b61fbcc59bef490f887322e6b9dc2eefcf364cb4e9b4112
+      # This uses an image pinned by container digest instead of a GitHub Action
+      # `@<sha>` pin, since the official action does not pin the container image
+      # it uses internally (only the action metadata/caller script) and this
+      # container holds a token capable of deleting packages.
+      CLEANUP_IMAGE: ghcr.io/snok/container-retention-policy@sha256:884037f146d6ef574b61fbcc59bef490f887322e6b9dc2eefcf364cb4e9b4112 # 3.1.0
       CLEANUP_LOG_NAME: container-retention-policy.log
     steps:
       # Fail fast before any deletion path runs. image-name must be a single
