@@ -48,7 +48,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: linuxfoundation/lfx-public-workflows/.github/workflows/ghcr-image-cleanup.yaml@<full-commit-sha>  # v1.0.0
+    uses: linuxfoundation/lfx-public-workflows/.github/workflows/ghcr-image-cleanup.yaml@<full-commit-sha> # v1.0.0
     with:
       image-name: lfx-v2-campaign-service/campaign-service
       image-tags: "!v* !latest !development"
@@ -84,7 +84,7 @@ jobs:
       contents: read
       packages: write
       pull-requests: read
-    uses: linuxfoundation/lfx-public-workflows/.github/workflows/ghcr-image-cleanup.yaml@<full-commit-sha>  # v1.0.0
+    uses: linuxfoundation/lfx-public-workflows/.github/workflows/ghcr-image-cleanup.yaml@<full-commit-sha> # v1.0.0
     with:
       image-name: lfx-self-serve
       image-tags: "!development !latest !*.*.* !*.*"
