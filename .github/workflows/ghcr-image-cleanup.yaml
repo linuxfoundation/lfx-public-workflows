@@ -134,14 +134,16 @@ jobs:
   cleanup:
     name: Cleanup Stale Container Images
     needs: [preview-tags]
-    # Run after preview discovery. always() lets cleanup proceed when the
-    # preview-tags job is skipped (preview protection off); the result guards
-    # make cleanup fail-safe: if preview discovery FAILED, skip cleanup rather
-    # than delete previews without their protective filters.
+    # Run after preview discovery. Allowlist result states so cleanup proceeds
+    # only when discovery SUCCEEDED (preview protection on) or was SKIPPED
+    # (preview protection off). Any other state (failure, cancelled, or any
+    # unexpected result) skips cleanup, so previews are never deleted without
+    # their protective filters. always() is required so a skipped dependency
+    # does not skip cleanup by default.
     if: >-
       ${{ always()
-          && needs.preview-tags.result != 'failure'
-          && needs.preview-tags.result != 'cancelled' }}
+          && (needs.preview-tags.result == 'success'
+              || needs.preview-tags.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
       # Minimal for every caller: only deletes package versions. Preview
