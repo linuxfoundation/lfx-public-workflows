@@ -8,7 +8,8 @@ human-readable version.
 
 ### GitHub Actions
 
-Pin every `uses:` reference to a full-length (40-character) commit SHA, with a
+Pin every remote (repository-based) action, `uses: owner/repo@...` or
+`uses: owner/repo/path@...`, to a full-length (40-character) commit SHA, with a
 trailing comment naming the release tag:
 
 ```yaml
@@ -18,6 +19,10 @@ uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 Do not use moving references: no `@v4`, `@main`, `@master`, or other branch or
 tag refs. A tag or branch can be repointed to different code after review; a
 commit SHA cannot.
+
+This rule covers remote repository actions only. Local actions
+(`uses: ./...`) are in-repo and are not pinned, and container images
+(including `uses: docker://...`) follow the Container images section below.
 
 ### Container images
 
@@ -39,7 +44,7 @@ Consumers MUST pin the `uses:` reference to a full commit SHA of this
 repository, annotated with the release version:
 
 ```yaml
-uses: linuxfoundation/lfx-public-workflows/.github/workflows/ghcr-image-cleanup.yaml@<full-commit-sha> # v1.0.0
+uses: linuxfoundation/lfx-public-workflows/.github/workflows/<workflow>.yaml@<full-commit-sha> # <version>
 ```
 
 ### Why
