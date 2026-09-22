@@ -19,11 +19,10 @@ workflow from a consumer repository.
 
 Reusable workflows live in `.github/workflows/` (each triggered by
 `on: workflow_call`), and composite actions in `.github/actions/`. Repository
-owners are listed in `OWNERS.md`, the security policy in `SECURITY.md`, and
-licenses in `LICENSE` (MIT, source) and `LICENSE-docs` (CC-BY-4.0,
-documentation). Contributor rules, including the pinning policy, live in
-`CONTRIBUTING.md` (see the Pinning policy section below). Per-workflow
-documentation, when a workflow ships it, lives under `docs/`.
+owners are listed in `OWNERS.md`, with `.github/CODEOWNERS` driving automatic
+review requests. The security policy is in `SECURITY.md`, and licenses in
+`LICENSE` (MIT, source) and `LICENSE-docs` (CC-BY-4.0, documentation). The
+pinning policy is documented in the Conventions section below.
 
 ## Conventions
 
