@@ -88,17 +88,66 @@ permissions:
   contents: read
 
 jobs:
-  cleanup:
-    name: Cleanup Stale Container Images
+  # Preview discovery is isolated in its own job so its pull-requests: read
+  # scope is requested ONLY when preview protection is enabled. Callers that
+  # leave preview protection off skip this job entirely, so a called-workflow
+  # permission exceeding their token ceiling is never validated for them (an
+  # omitted caller scope is `none`, and a called job cannot request more than
+  # the caller granted). The cleanup job stays at packages: write for every
+  # caller and consumes this job's filters output.
+  preview-tags:
+    name: Build active preview tag filters
+    if: ${{ inputs.enable-preview-protection }}
     runs-on: ubuntu-latest
     permissions:
-      # packages: write deletes package versions. pull-requests: read is
-      # requested so a caller that enables preview protection keeps it: a
-      # called workflow zeroes omitted scopes and can only downgrade (never
-      # elevate) relative to the caller, so callers that do not grant
-      # pull-requests: read gain nothing from this line.
-      packages: write
       pull-requests: read
+    outputs:
+      filters: ${{ steps.preview.outputs.filters }}
+    steps:
+      # Enumerates open PRs carrying the preview label and appends per-PR
+      # protective filters so live previews are not deleted while their PR is
+      # still open. gh output is captured in a variable so set -e aborts on
+      # API/auth failure; gh api --paginate walks every page so no labeled PR
+      # is dropped by a result cap, and the label is matched via jq env (no
+      # interpolation into the query).
+      - name: Build active preview tag filters
+        id: preview
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_TAGS: ${{ inputs.image-tags }}
+          PREVIEW_LABEL: ${{ inputs.preview-label }}
+          PREVIEW_TAG_PREFIX: ${{ inputs.preview-tag-prefix }}
+        run: |
+          set -euo pipefail
+          filters="${BASE_TAGS}"
+          preview_prs="$(
+            gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" \
+              --jq '.[] | select(any(.labels[].name; . == env.PREVIEW_LABEL)) | .number'
+          )"
+          while IFS= read -r pr_number; do
+            [[ -n "$pr_number" ]] || continue
+            filters+=" !${PREVIEW_TAG_PREFIX}${pr_number}"
+          done <<< "${preview_prs}"
+          echo "filters=${filters}" >> "$GITHUB_OUTPUT"
+
+  cleanup:
+    name: Cleanup Stale Container Images
+    needs: [preview-tags]
+    # Run after preview discovery. always() lets cleanup proceed when the
+    # preview-tags job is skipped (preview protection off); the result guards
+    # make cleanup fail-safe: if preview discovery FAILED, skip cleanup rather
+    # than delete previews without their protective filters.
+    if: >-
+      ${{ always()
+          && needs.preview-tags.result != 'failure'
+          && needs.preview-tags.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+    permissions:
+      # Minimal for every caller: only deletes package versions. Preview
+      # discovery (pull-requests: read) lives in the preview-tags job so this
+      # scope is never requested for preview-disabled callers.
+      packages: write
     outputs:
       deleted-count: ${{ steps.summary.outputs.deleted-count }}
       would-delete-count: ${{ steps.summary.outputs.would-delete-count }}
@@ -142,40 +191,12 @@ jobs:
           fi
           echo "Validated image-name: ${IMAGE_NAME}"
 
-      # Only runs when preview protection is enabled. Enumerates open PRs
-      # carrying the preview label and appends per-PR protective filters so
-      # live previews are not deleted while their PR is still open. Requires
-      # the caller to have granted pull-requests: read. gh output is captured
-      # in a variable so set -e aborts on API/auth failure; gh api --paginate
-      # walks every page so no labeled PR is dropped by a result cap, and the
-      # label is matched via jq env (no interpolation into the query).
-      - name: Build active preview tag filters
-        id: preview-tags
-        if: ${{ inputs.enable-preview-protection }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BASE_TAGS: ${{ inputs.image-tags }}
-          PREVIEW_LABEL: ${{ inputs.preview-label }}
-          PREVIEW_TAG_PREFIX: ${{ inputs.preview-tag-prefix }}
-        run: |
-          set -euo pipefail
-          filters="${BASE_TAGS}"
-          preview_prs="$(
-            gh api --paginate \
-              "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" \
-              --jq '.[] | select(any(.labels[].name; . == env.PREVIEW_LABEL)) | .number'
-          )"
-          while IFS= read -r pr_number; do
-            [[ -n "$pr_number" ]] || continue
-            filters+=" !${PREVIEW_TAG_PREFIX}${pr_number}"
-          done <<< "${preview_prs}"
-          echo "filters=${filters}" >> "$GITHUB_OUTPUT"
-
       # Invoked with `docker run` rather than `uses: docker://...` so stdout can
       # be teed for the summary step. Every CLI flag is env-bound. tag-selection
       # =both covers tagged and untagged versions; --shas-to-skip is required by
-      # the CLI parser even when empty. IMAGE_TAGS uses the preview-augmented
-      # filter set when preview protection is on, otherwise the base input.
+      # the CLI parser even when empty. IMAGE_TAGS uses the preview-tags job's
+      # augmented filter set when preview protection is on, otherwise the base
+      # input.
       # DRY_RUN: scheduled runs force delete; other triggers honor the input
       # (default preview). The 'false'/'true' strings are non-empty (truthy) in
       # GitHub expressions, so the ternary chain resolves correctly.
@@ -185,7 +206,7 @@ jobs:
           GHCR_CLEANUP_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ACCOUNT: ${{ inputs.account }}
           IMAGE_NAME: ${{ inputs.image-name }}
-          IMAGE_TAGS: ${{ inputs.enable-preview-protection && steps.preview-tags.outputs.filters || inputs.image-tags }}
+          IMAGE_TAGS: ${{ (inputs.enable-preview-protection && needs.preview-tags.outputs.filters) || inputs.image-tags }}
           CUT_OFF: ${{ inputs.cut-off }}
           DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || inputs.dry-run && 'true' || 'false' }}
         run: |
