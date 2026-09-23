@@ -97,4 +97,6 @@ jobs:
 - Scheduled runs delete; manual runs default to a dry-run preview. Review the job summary
   from a dry-run before relying on a scheduled delete.
 - `image-name` must be one exact package. The workflow fails fast on wildcards or lists.
+- For a personal GHCR package, set `account: user` (the literal string). Do not pass a
+  GitHub username; the cleanup tool treats every other value as an organization name.
 - See [inputs.md](./inputs.md) for the full input, permission, and output contract.

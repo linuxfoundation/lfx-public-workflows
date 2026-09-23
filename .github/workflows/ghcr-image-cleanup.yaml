@@ -13,8 +13,8 @@ name: "Cleanup Stale Container Images"
 #   - The caller declares `permissions: packages: write` (and
 #     `pull-requests: read` ONLY when enable-preview-protection is true).
 #   - All caller/context values are bound through step-level `env:` and
-#     referenced as quoted shell variables; no `${{ }}` interpolation appears
-#     inside any `run:` block (script-injection prevention).
+#     referenced as quoted shell variables; no Actions-expression interpolation
+#     appears inside any `run:` block (script-injection prevention).
 #   - Deletion is scoped to one exact-match package name; wildcards, lists,
 #     and empty values are rejected before anything is deleted.
 
@@ -30,7 +30,11 @@ name: "Cleanup Stale Container Images"
         type: string
         required: true
       account:
-        description: "GHCR account/owner that holds the package."
+        description: >
+          GHCR account that holds the package. Use the organization name
+          (e.g. linuxfoundation) or the literal value "user" for a personal
+          account. Do not pass a GitHub username; any value other than "user"
+          is treated as an organization.
         type: string
         required: false
         default: "linuxfoundation"
@@ -167,7 +171,7 @@ jobs:
       # Fail fast before any deletion path runs. image-name must be a single
       # exact package: no wildcard (the delete token would match too much), no
       # list, no whitespace, not empty. Value is env-bound; the run body never
-      # interpolates ${{ }}.
+      # interpolates Actions expressions.
       - name: Validate inputs
         env:
           IMAGE_NAME: ${{ inputs.image-name }}
