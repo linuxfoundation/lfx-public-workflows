@@ -14,7 +14,7 @@ status: stable
 
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
-| `image-name` | string | yes | — | Exactly one GHCR package name (e.g. `lfx-self-serve`, `lfx-v2-campaign-service/campaign-service`). Wildcards, lists, whitespace, and empty values are rejected. |
+| `image-name` | string | yes | — | Exactly one GHCR package name (e.g. `lfx-self-serve`, `lfx-v2-campaign-service/campaign-service`). Wildcards, lists, whitespace, quotes, and empty values are rejected. |
 | `account` | string | no | `linuxfoundation` | GHCR account that holds the package. Organization name, or the literal value `user` for a personal account. Do not pass a GitHub username; any other value is treated as an organization. |
 | `cut-off` | string | no | `30d` | Minimum age before a version is eligible for deletion (e.g. `30d`, `4w 2d`). |
 | `image-tags` | string | no | `!latest !development !v* !*.*.*` | Space-separated protected-tag patterns (negative patterns protect). Override for repo-specific protection. The caller's default-branch name is always appended as an extra protective filter. |
@@ -73,7 +73,7 @@ The human-readable summary is always written to the job's step summary.
   The caller's default-branch tag is always protected in addition to `image-tags`.
 - **G3**: With `enable-preview-protection: true`, protects `ui-pr-<PR#>` versions for open
   PRs labeled `preview-label`; makes no PR API call when false.
-- **G4**: Scoped to exactly one exact-match package; never wildcards.
+- **G4**: Scoped to exactly one exact-match package; never wildcards, lists, or quotes.
 - **G5**: Writes a run summary (trigger, dry-run, cut-off, selected, protected multi-arch
   children, would-delete/deleted, failed) to the step summary.
 - **G6**: Exits non-zero when any deletion fails.

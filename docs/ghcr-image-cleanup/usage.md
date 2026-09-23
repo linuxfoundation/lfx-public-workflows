@@ -96,7 +96,7 @@ jobs:
 
 - Scheduled runs delete; manual runs default to a dry-run preview. Review the job summary
   from a dry-run before relying on a scheduled delete.
-- `image-name` must be one exact package. The workflow fails fast on wildcards or lists.
+- `image-name` must be one exact package. The workflow fails fast on wildcards, lists, or quotes.
 - The caller's default-branch name is always added to the protected tag filters, even
   when `image-tags` is overridden.
 - For a personal GHCR package, set `account: user` (the literal string). Do not pass a

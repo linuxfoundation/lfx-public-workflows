@@ -25,8 +25,10 @@ name: "Cleanup Stale Container Images"
       image-name:
         description: >
           Exactly one GHCR package name to clean up (e.g. "lfx-self-serve" or
-          "lfx-v2-campaign-service/campaign-service"). Wildcards, lists, and
-          empty values are rejected.
+          "lfx-v2-campaign-service/campaign-service"). Wildcards, lists, quotes,
+          and empty values are rejected. Surrounding quotes are stripped by the
+          cleanup CLI before matching, so quoted values would otherwise become
+          negative or empty matchers.
         type: string
         required: true
       account:
@@ -196,10 +198,12 @@ jobs:
     steps:
       # Fail fast before any deletion path runs. image-name must be a single
       # exact package: no wildcard (the delete token would match too much), no
-      # list, no whitespace, not empty. CR/LF in other string inputs is also
-      # rejected so a malformed value cannot split a later GITHUB_OUTPUT write
-      # or CLI flag. Values are env-bound; the run body never interpolates
-      # Actions expressions.
+      # list, no whitespace, no quotes, not empty. The cleanup CLI strips
+      # surrounding quotes before building matchers, so a quoted value such as
+      # "!foo" would otherwise become a negative matcher. CR/LF in other string
+      # inputs is also rejected so a malformed value cannot split a later
+      # GITHUB_OUTPUT write or CLI flag. Values are env-bound; the run body
+      # never interpolates Actions expressions.
       - name: Validate inputs
         env:
           IMAGE_NAME: ${{ inputs.image-name }}
@@ -225,6 +229,12 @@ jobs:
             echo "image-name must not contain whitespace (one exact package only)." >&2
             exit 1
           fi
+          case "$IMAGE_NAME" in
+            *\"*|*"'"*)
+              echo "image-name must not contain quote characters." >&2
+              exit 1
+              ;;
+          esac
           if [[ "$IMAGE_NAME" == *,* ]]; then
             echo "image-name must be a single package, not a comma-separated list." >&2
             exit 1
