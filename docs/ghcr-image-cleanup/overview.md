@@ -22,7 +22,7 @@ caller workflow and delegates the work here.
 ## What it does
 
 - Selects tagged and untagged versions of one exact-match package older than a cut-off.
-- Protects release tags, `latest`, and the default-branch build by default.
+- Protects release tags, `latest`, `development`, and the caller's default-branch tag by default.
 - Optionally protects deploy-preview images tied to still-open pull requests.
 - Writes a run summary (selected, protected, would-delete/deleted, failed) to the job
   summary, and exits non-zero if any deletion fails.

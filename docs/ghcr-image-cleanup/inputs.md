@@ -17,7 +17,7 @@ status: stable
 | `image-name` | string | yes | — | Exactly one GHCR package name (e.g. `lfx-self-serve`, `lfx-v2-campaign-service/campaign-service`). Wildcards, lists, whitespace, and empty values are rejected. |
 | `account` | string | no | `linuxfoundation` | GHCR account that holds the package. Organization name, or the literal value `user` for a personal account. Do not pass a GitHub username; any other value is treated as an organization. |
 | `cut-off` | string | no | `30d` | Minimum age before a version is eligible for deletion (e.g. `30d`, `4w 2d`). |
-| `image-tags` | string | no | `!latest !development !v* !*.*.*` | Space-separated protected-tag patterns (negative patterns protect). Override for repo-specific protection. |
+| `image-tags` | string | no | `!latest !development !v* !*.*.*` | Space-separated protected-tag patterns (negative patterns protect). Override for repo-specific protection. The caller's default-branch name is always appended as an extra protective filter. |
 | `dry-run` | boolean | no | `true` | Preview only. Scheduled runs always delete regardless; other triggers honor this. |
 | `enable-preview-protection` | boolean | no | `false` | Protect deploy-preview images tied to open PRs. Requires `pull-requests: read`. |
 | `preview-label` | string | no | `deploy-preview` | PR label identifying preview PRs. Used only when preview protection is on. |
@@ -25,7 +25,10 @@ status: stable
 
 The default `image-tags` is a superset baseline. `lfx-self-serve` overrides it (it also
 protects two-segment `!*.*` tags), so the default alone does not reproduce self-serve
-protection. Set `image-tags` explicitly to match a specific repo's tag scheme.
+protection. Set `image-tags` explicitly to match a specific repo's tag scheme. The
+caller's default-branch tag is always protected in addition to this input, so a repo
+whose default branch is `main` (or any name other than `development`) does not leave
+that branch tag eligible for deletion.
 
 `account` is an organization name, not a GitHub username. Personal packages must use
 the literal value `user`; any other value is sent to the organization packages API.
@@ -67,6 +70,7 @@ The human-readable summary is always written to the job's step summary.
 
 - **G1**: Deletes only versions older than `cut-off` that carry no protected tag.
 - **G2**: Protects `latest`, `development`, `v*`, and `*.*.*` tags by default; overridable.
+  The caller's default-branch tag is always protected in addition to `image-tags`.
 - **G3**: With `enable-preview-protection: true`, protects `ui-pr-<PR#>` versions for open
   PRs labeled `preview-label`; makes no PR API call when false.
 - **G4**: Scoped to exactly one exact-match package; never wildcards.

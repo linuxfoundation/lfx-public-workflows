@@ -48,8 +48,10 @@ name: "Cleanup Stale Container Images"
       image-tags:
         description: >
           Space-separated protected-tag patterns (negative patterns protect).
-          Default protects latest, the default-branch build, v-prefixed release
-          tags, and bare semver tags. Override for repo-specific protection.
+          Default protects latest, development (LFX convention), v-prefixed
+          release tags, and bare semver tags. The caller's default-branch name
+          is always appended as an additional protective filter. Override for
+          repo-specific protection; the default-branch filter is still applied.
         type: string
         required: false
         default: "!latest !development !v* !*.*.*"
@@ -113,7 +115,9 @@ jobs:
       # still open. gh output is captured in a variable so set -e aborts on
       # API/auth failure; gh api --paginate walks every page so no labeled PR
       # is dropped by a result cap, and the label is matched via jq env (no
-      # interpolation into the query).
+      # interpolation into the query). Caller-controlled values are rejected if
+      # they contain CR/LF before the single-line GITHUB_OUTPUT write, and the
+      # caller's default-branch tag is always appended to the filter set.
       - name: Build active preview tag filters
         id: preview
         env:
@@ -121,8 +125,25 @@ jobs:
           BASE_TAGS: ${{ inputs.image-tags }}
           PREVIEW_LABEL: ${{ inputs.preview-label }}
           PREVIEW_TAG_PREFIX: ${{ inputs.preview-tag-prefix }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
+          reject_crlf() {
+            local name="$1"
+            local value="$2"
+            if [ "$value" != "$(printf '%s' "$value" | tr -d '\n\r')" ]; then
+              echo "${name} must not contain CR or LF." >&2
+              exit 1
+            fi
+          }
+          reject_crlf "image-tags" "${BASE_TAGS}"
+          reject_crlf "preview-label" "${PREVIEW_LABEL}"
+          reject_crlf "preview-tag-prefix" "${PREVIEW_TAG_PREFIX}"
+          reject_crlf "default-branch" "${DEFAULT_BRANCH}"
+          if [[ -z "${DEFAULT_BRANCH}" || "${DEFAULT_BRANCH}" =~ [[:space:]] ]]; then
+            echo "caller default branch must be a single non-empty token." >&2
+            exit 1
+          fi
           filters="${BASE_TAGS}"
           preview_prs="$(
             gh api --paginate \
@@ -133,7 +154,12 @@ jobs:
             [[ -n "$pr_number" ]] || continue
             filters+=" !${PREVIEW_TAG_PREFIX}${pr_number}"
           done <<< "${preview_prs}"
-          echo "filters=${filters}" >> "$GITHUB_OUTPUT"
+          reject_crlf "filters" "${filters}"
+          case " ${filters} " in
+            *" !${DEFAULT_BRANCH} "*) ;;
+            *) filters="${filters} !${DEFAULT_BRANCH}" ;;
+          esac
+          printf 'filters=%s\n' "${filters}" >> "$GITHUB_OUTPUT"
 
   cleanup:
     name: Cleanup Stale Container Images
@@ -170,13 +196,27 @@ jobs:
     steps:
       # Fail fast before any deletion path runs. image-name must be a single
       # exact package: no wildcard (the delete token would match too much), no
-      # list, no whitespace, not empty. Value is env-bound; the run body never
-      # interpolates Actions expressions.
+      # list, no whitespace, not empty. CR/LF in other string inputs is also
+      # rejected so a malformed value cannot split a later GITHUB_OUTPUT write
+      # or CLI flag. Values are env-bound; the run body never interpolates
+      # Actions expressions.
       - name: Validate inputs
         env:
           IMAGE_NAME: ${{ inputs.image-name }}
+          IMAGE_TAGS: ${{ inputs.image-tags }}
+          ACCOUNT: ${{ inputs.account }}
+          CUT_OFF: ${{ inputs.cut-off }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
+          reject_crlf() {
+            local name="$1"
+            local value="$2"
+            if [ "$value" != "$(printf '%s' "$value" | tr -d '\n\r')" ]; then
+              echo "${name} must not contain CR or LF." >&2
+              exit 1
+            fi
+          }
           if [[ -z "${IMAGE_NAME//[[:space:]]/}" ]]; then
             echo "image-name must not be empty." >&2
             exit 1
@@ -197,6 +237,14 @@ jobs:
             echo "image-name must be an exact name, not a wildcard pattern ('*' or '?')." >&2
             exit 1
           fi
+          reject_crlf "image-tags" "${IMAGE_TAGS}"
+          reject_crlf "account" "${ACCOUNT}"
+          reject_crlf "cut-off" "${CUT_OFF}"
+          reject_crlf "default-branch" "${DEFAULT_BRANCH}"
+          if [[ -z "${DEFAULT_BRANCH}" || "${DEFAULT_BRANCH}" =~ [[:space:]] ]]; then
+            echo "caller default branch must be a single non-empty token." >&2
+            exit 1
+          fi
           echo "Validated image-name: ${IMAGE_NAME}"
 
       # Invoked with `docker run` rather than `uses: docker://...` so stdout can
@@ -208,7 +256,9 @@ jobs:
       # a coarse untagged-only safety fallback. It is ignored for org accounts.
       # IMAGE_TAGS uses the preview-tags job's
       # augmented filter set when preview protection is on, otherwise the base
-      # input.
+      # input. The caller's default-branch name is then appended unless already
+      # present, so a main (or other) default branch is never left unprotected
+      # by the development-oriented default image-tags.
       # DRY_RUN: scheduled runs force delete; other triggers honor the input
       # (default preview). The 'false'/'true' strings are non-empty (truthy) in
       # GitHub expressions, so the ternary chain resolves correctly.
@@ -221,8 +271,21 @@ jobs:
           IMAGE_TAGS: ${{ (inputs.enable-preview-protection && needs.preview-tags.outputs.filters) || inputs.image-tags }}
           CUT_OFF: ${{ inputs.cut-off }}
           DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || inputs.dry-run && 'true' || 'false' }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
+          if [ "${IMAGE_TAGS}" != "$(printf '%s' "${IMAGE_TAGS}" | tr -d '\n\r')" ]; then
+            echo "image-tags must not contain CR or LF." >&2
+            exit 1
+          fi
+          if [[ -z "${DEFAULT_BRANCH}" || "${DEFAULT_BRANCH}" =~ [[:space:]] ]]; then
+            echo "caller default branch must be a single non-empty token." >&2
+            exit 1
+          fi
+          case " ${IMAGE_TAGS} " in
+            *" !${DEFAULT_BRANCH} "*) ;;
+            *) IMAGE_TAGS="${IMAGE_TAGS} !${DEFAULT_BRANCH}" ;;
+          esac
           cleanup_log="${RUNNER_TEMP}/${CLEANUP_LOG_NAME}"
           docker pull "$CLEANUP_IMAGE"
           docker run --rm \
