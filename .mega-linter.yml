@@ -1,0 +1,71 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+---
+# Adapted from linuxfoundation/lfx-v2-argocd and
+# linuxfoundation/lfx-v2-access-check for a YAML/Actions/Markdown repo.
+# Documentation flavor is used by the workflow. ENABLE_LINTERS is the
+# advertised CI set from README.md. Do not use ENABLE with a descriptor
+# (YAML, MARKDOWN, ACTION, REPOSITORY, SPELL): that would activate every
+# linter in the descriptor, including ones this repo does not advertise
+# (REPOSITORY_LS_LINT, REPOSITORY_SEMGREP, YAML_V8R, …).
+ENABLE_LINTERS:
+  - YAML_YAMLLINT
+  - MARKDOWN_MARKDOWNLINT
+  - ACTION_ACTIONLINT
+  - ACTION_ZIZMOR
+  - SPELL_CSPELL
+
+# Default ACTION_DIRECTORY is .github/workflows, which would skip
+# composite actions. Point both ACTION linters at .github, then keep
+# actionlint on workflows only (it is a workflow linter). zizmor then
+# scans workflows and .github/actions/**/action.yml.
+ACTION_DIRECTORY: .github
+ACTION_ACTIONLINT_FILTER_REGEX_INCLUDE: (\.github/workflows/)
+
+GITHUB_COMMENT_REPORTER: false
+VALIDATE_ALL_CODEBASE: true
+
+DISABLE_ERRORS_LINTERS:
+  # There's no easy local feedback loop for spelling issues before
+  # pushing, so keep them non-blocking to avoid unnecessary PR cycles
+  # for words that just need adding to the dictionary.
+  - SPELL_CSPELL
+
+YAML_YAMLLINT_CONFIG_FILE: .yamllint.yml
+MARKDOWN_MARKDOWNLINT_CONFIG_FILE: .markdownlint.yml
+MARKDOWN_MARKDOWNLINT_RULES_PATH: .
+
+SPELL_CSPELL_ANALYZE_FILE_NAMES: false
+# This repo is the source of cspell/flagwords.json.snippet, so substitute
+# from the local file rather than curling main (which would not test
+# in-flight snippet changes). The test/sed/restore shape matches
+# cspell/README.md so consuming repos stay copy-paste compatible.
+SPELL_CSPELL_PRE_COMMANDS:
+  - command: >-
+      cp .cspell.json /tmp/cspell.json.orig &&
+      cp cspell/flagwords.json.snippet /tmp/flagwords.json.snippet &&
+      test "$(grep -c '^[[:space:]]*"flagWords"[[:space:]]*:[[:space:]]*\[\],[[:space:]]*$' .cspell.json)" -eq 1 &&
+      sed -i -e '/^[[:space:]]*"flagWords"[[:space:]]*:[[:space:]]*\[\],[[:space:]]*$/{r /tmp/flagwords.json.snippet' -e 'd}' .cspell.json
+    cwd: "workspace"
+    continue_if_failed: false
+SPELL_CSPELL_POST_COMMANDS:
+  - command: cp /tmp/cspell.json.orig .cspell.json
+    cwd: "workspace"
+
+# Allow zizmor's online audits (e.g. artipacked SHA-to-tag resolution) to
+# authenticate to the GitHub API; without this the audits fail with HTTP 401.
+ACTION_ZIZMOR_UNSECURED_ENV_VARIABLES:
+  - GITHUB_TOKEN
+
+FILTER_REGEX_EXCLUDE: |
+  (
+    LICENSE.*|
+    megalinter-reports/.*|
+    cspell/flagwords\.json\.snippet
+  )
+
+PRINT_ALL_FILES: false
+PRINT_ALPACA: false
+SHOW_ELAPSED_TIME: true
+DISABLE_ERRORS: false
+FAIL_IF_MISSING_LINTER_IN_FLAVOR: false

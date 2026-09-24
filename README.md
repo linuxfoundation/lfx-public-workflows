@@ -13,12 +13,15 @@ The public repository for shared workflows for projects under the `linuxfoundati
   Reusable workflows wrapping <https://github.com/dflook/terraform-github-actions> OpenTofu actions with extra setup
   glue for AWS login and secrets handling.
 
-  The standalone `plan` and `apply` workflows are intended for a plan-on-PR/merge-on-apply workflow, `check` is for reoccurring drift detection jobs, and `plan-apply` is for manual triggers outside of the PR process (e.g. for retrying or resolving drift).
+  The standalone `plan` and `apply` workflows are intended for a
+  plan-on-PR/merge-on-apply workflow, `check` is for reoccurring drift
+  detection jobs, and `plan-apply` is for manual triggers outside of the
+  PR process (e.g. for retrying or resolving drift).
 
   Most inputs are shared across all four workflows:
 
   | Input                     | Type   | Required | Default             | Description                                          |
-  | ------------------------- | ------ | -------- | ------------------- | ---------------------------------------------------- |
+  |---------------------------|--------|----------|---------------------|------------------------------------------------------|
   | `environment`             | string | yes      |                     | Name of the GHA environment to use                   |
   | `opentofu_workspace`      | string |          | (environment input) | Name of the OpenTofu workspace to use                |
   | `opentofu_variables`      | string |          |                     | Variables to pass to OpenTofu                        |
@@ -39,11 +42,17 @@ The public repository for shared workflows for projects under the `linuxfoundati
   A few inputs only apply to specific workflows:
 
   | Input                         | Applies to           | Type    | Default | Description                                               |
-  | ----------------------------- | -------------------- | ------- | ------- | --------------------------------------------------------- |
+  |-------------------------------|----------------------|---------|---------|-----------------------------------------------------------|
   | `opentofu_add_github_comment` | `plan`, `plan-apply` | string  | `true`  | Post the plan output as a comment on the PR               |
   | `enable_incidentio_alert`     | `check`              | boolean | `false` | Enable Incident.io alert creation on drift detection      |
   | `incidentio_alert_token`      | `check`              | string  |         | Incident.io alert token source (as `ENVVAR, /path/in/sm`) |
   | `incidentio_alert_source`     | `check`              | string  |         | Incident.io alert source (as `ENVVAR, /path/in/sm`)       |
+
+## CI
+
+Pull requests run [MegaLinter](https://megalinter.io/) (documentation flavor)
+with actionlint, zizmor, yamllint, markdownlint, and cspell.
+See `.github/workflows/mega-linter.yml` and `.mega-linter.yml`.
 
 ## License
 
