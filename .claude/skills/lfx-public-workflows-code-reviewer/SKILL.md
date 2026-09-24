@@ -133,7 +133,7 @@ rules that area's sources state.
 | Area                   | Rules to walk                                                                                                                                                                                                                                                              |
 |------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `.github/workflows/**` | SHA pins + version comment; `persist-credentials: false` on checkout; `${{ }}` stays out of `run:` scripts (bind via `env:`); least-privilege `permissions`; `on.workflow_call.outputs` for anything callers must read; every declared input/secret is consumed            |
-| `.github/actions/**`   | same pinning and `env:`-binding rules; composite `inputs` have no `type:` key                                                                                                                                                                                              |
+| `.github/actions/**`   | same pinning and `env:`-binding rules                                                                                                                                                                                                                                      |
 | `.mega-linter.yml`     | `ENABLE_LINTERS` matches advertised CI; no descriptor `ENABLE`; `ACTION_DIRECTORY` is `.github` (zizmor covers workflows and composite actions; actionlint stays on workflows); cspell PRE/POST match `cspell/README.md`; local snippet, not curl `main`                   |
 | `cspell/**`            | snippet is `"flagWords": [...],` fragment, not a JSON document; consumer setup in `cspell/README.md` stays accurate                                                                                                                                                        |
 | `README.md`            | advertised inputs/outputs/defaults match the four OpenTofu workflows and `license-header-check.yml`; CI section matches this repo's non-`workflow_call` workflows                                                                                                          |
@@ -165,7 +165,7 @@ Two levels, and no others:
 - **`Important`** — every other quotable rule violation: missing
   `persist-credentials: false`, over-broad permissions, cspell substitution
   that skips the placeholder guard or the restore, README drift from the
-  workflow, a composite action input using `type:`.
+  workflow.
 
 ## Your report
 
