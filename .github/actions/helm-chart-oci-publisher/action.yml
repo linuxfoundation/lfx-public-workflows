@@ -55,13 +55,15 @@ runs:
   steps:
     - name: Install Helm
       shell: bash
+      env:
+        HELM_VERSION: ${{ inputs.helm_version }}
       run: |
         set -euo pipefail
         tmpDir="$(mktemp -d)"
         pushd "$tmpDir" >& /dev/null
-      
-        curl -sSL -o helm.tar.gz 'https://get.helm.sh/helm-v${{ inputs.helm_version }}-linux-amd64.tar.gz'
-        curl -sSL -o helm.tar.gz.sha256 'https://get.helm.sh/helm-v${{ inputs.helm_version }}-linux-amd64.tar.gz.sha256'
+
+        curl -sSL -o helm.tar.gz "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz"
+        curl -sSL -o helm.tar.gz.sha256 "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz.sha256"
         echo "$(cat helm.tar.gz.sha256) helm.tar.gz" | sha256sum --check
         tar xz -f helm.tar.gz
         mkdir -p "$HOME/bin"
@@ -72,46 +74,71 @@ runs:
     - name: Create Chart path
       id: chart-path
       shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_NAME: ${{ inputs.name }}
       run: |
         set -euo pipefail
-        CHART_PATH="${{ !inputs.path && format('{0}/{1}', 'charts', inputs.name) || inputs.path }}"
-        echo "result=$CHART_PATH" >> "$GITHUB_OUTPUT"
+        if [ -z "${INPUT_PATH}" ]; then
+          CHART_PATH="charts/${INPUT_NAME}"
+        else
+          CHART_PATH="${INPUT_PATH}"
+        fi
+        echo "result=${CHART_PATH}" >> "${GITHUB_OUTPUT}"
     - name: Set version in Chart.yaml
       shell: bash
+      env:
+        CHART_PATH: ${{ steps.chart-path.outputs.result }}
+        CHART_VERSION: ${{ inputs.chart_version }}
       run: |
         set -euo pipefail
-        yq eval '.version = "${{ inputs.chart_version }}"' -i '${{ steps.chart-path.outputs.result }}/Chart.yaml'
+        yq eval '.version = strenv(CHART_VERSION)' -i "${CHART_PATH}/Chart.yaml"
     - name: Set appVersion in Chart.yaml
       if: inputs.app_version != ''
       shell: bash
+      env:
+        CHART_PATH: ${{ steps.chart-path.outputs.result }}
+        APP_VERSION: ${{ inputs.app_version }}
       run: |
         set -euo pipefail
-        yq eval '.appVersion = "${{ inputs.app_version }}"' -i '${{ steps.chart-path.outputs.result }}/Chart.yaml'
+        yq eval '.appVersion = strenv(APP_VERSION)' -i "${CHART_PATH}/Chart.yaml"
     - name: Login to helm registry
       shell: bash
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        REGISTRY_USERNAME: ${{ inputs.registry_username }}
+        REGISTRY_PASSWORD: ${{ inputs.registry_password }}
       run: |
         set -euo pipefail
-        echo '${{ inputs.registry_password }}' | helm registry login -u '${{ inputs.registry_username }}' --password-stdin '${{ inputs.registry }}'
+        echo "${REGISTRY_PASSWORD}" | helm registry login -u "${REGISTRY_USERNAME}" --password-stdin "${REGISTRY}"
     - name: Package the chart
       shell: bash
+      env:
+        CHART_PATH: ${{ steps.chart-path.outputs.result }}
+        CHART_VERSION: ${{ inputs.chart_version }}
       run: |
         set -euo pipefail
-        if [ -f '${{ steps.chart-path.outputs.result }}/Chart.lock' ]; then
+        if [ -f "${CHART_PATH}/Chart.lock" ]; then
           yq -r '.dependencies[] | select(.repository | contains("oci://") == false) | "\(.name) \(.repository)"' \
-            '${{ steps.chart-path.outputs.result }}/Chart.yaml' | xargs -L1 helm repo add --force-update
-          helm dependency build '${{ steps.chart-path.outputs.result }}'
+            "${CHART_PATH}/Chart.yaml" | xargs -L1 helm repo add --force-update
+          helm dependency build "${CHART_PATH}"
         fi
-        helm package '${{ steps.chart-path.outputs.result }}' --version '${{ inputs.chart_version }}'
+        helm package "${CHART_PATH}" --version "${CHART_VERSION}"
     - name: Push the packaged chart to the registry
       id: result
       shell: bash
+      env:
+        CHART_NAME: ${{ inputs.name }}
+        CHART_VERSION: ${{ inputs.chart_version }}
+        REGISTRY: ${{ inputs.registry }}
+        REPOSITORY: ${{ inputs.repository }}
       run: |
         set -euo pipefail
-        OUTPUT=$(helm push '${{ inputs.name }}-${{ inputs.chart_version }}.tgz' 'oci://${{ inputs.registry }}/${{ inputs.repository }}' 2>&1) || {
+        OUTPUT=$(helm push "${CHART_NAME}-${CHART_VERSION}.tgz" "oci://${REGISTRY}/${REPOSITORY}" 2>&1) || {
           echo "Helm push failed: $OUTPUT"
           exit 1
         }
-        IMAGE_NAME='${{ inputs.registry }}/${{ inputs.repository }}/${{ inputs.name }}'
+        IMAGE_NAME="${REGISTRY}/${REPOSITORY}/${CHART_NAME}"
         IMAGE="$(echo "$OUTPUT" | grep "Pushed:" | awk '{print $2}')"
         DIGEST="$(echo "$OUTPUT" | grep "Digest:" | awk '{print $2}')"
         if [ -z "$IMAGE" ] || [ -z "$DIGEST" ]; then
@@ -122,9 +149,11 @@ runs:
           echo "image_name=$IMAGE_NAME"
           echo "image=$IMAGE"
           echo "image_digest=$DIGEST"
-        } >> "$GITHUB_OUTPUT"
+        } >> "${GITHUB_OUTPUT}"
     - name: Logout from the registry
       shell: bash
+      env:
+        REGISTRY: ${{ inputs.registry }}
       run: |
         set -euo pipefail
-        helm registry logout '${{ inputs.registry }}'
+        helm registry logout "${REGISTRY}"

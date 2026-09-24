@@ -1,0 +1,27 @@
+---
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+# YAML Lint Configuration
+extends: default
+
+ignore: |
+  .git
+  megalinter-reports
+
+rules:
+  line-length: disable
+  truthy:
+    allowed-values: ["true", "false", "on", "off"]
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable
+  braces:
+    max-spaces-inside: 1
+  brackets:
+    max-spaces-inside: 1
+  indentation:
+    spaces: 2
+    indent-sequences: true
+  document-start:
+    present: true
+    level: warning
