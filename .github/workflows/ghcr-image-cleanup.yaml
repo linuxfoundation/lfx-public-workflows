@@ -1,0 +1,438 @@
+# Copyright The Linux Foundation and each contributor to LFX.
+# SPDX-License-Identifier: MIT
+---
+name: "Cleanup Stale Container Images"
+
+# Reusable workflow: prunes stale GHCR container-image versions for a single
+# exact-match package. Callers own their own schedule / workflow_dispatch and
+# invoke this via `uses:` pinned to a full commit SHA.
+#
+# Security model (see docs/ghcr-image-cleanup/):
+#   - No `secrets:` block. The automatically provisioned GITHUB_TOKEN is used
+#     via `secrets.GITHUB_TOKEN`; callers MUST NOT use `secrets: inherit`.
+#   - The caller declares `permissions: packages: write` (and
+#     `pull-requests: read` ONLY when enable-preview-protection is true).
+#   - All caller/context values are bound through step-level `env:` and
+#     referenced as quoted shell variables; no Actions-expression interpolation
+#     appears inside any `run:` block (script-injection prevention).
+#   - Deletion is scoped to one exact-match package name; wildcards, lists,
+#     and empty values are rejected before anything is deleted.
+
+# yamllint disable-line rule:truthy
+"on":
+  workflow_call:
+    inputs:
+      image-name:
+        description: >
+          Exactly one GHCR package name to clean up (e.g. "lfx-self-serve" or
+          "lfx-v2-campaign-service/campaign-service"). Wildcards, lists, quotes,
+          and empty values are rejected. Surrounding quotes are stripped by the
+          cleanup CLI before matching, so quoted values would otherwise become
+          negative or empty matchers.
+        type: string
+        required: true
+      account:
+        description: >
+          GHCR account that holds the package. Use the organization name
+          (e.g. linuxfoundation) or the literal value "user" for a personal
+          account. Do not pass a GitHub username; any value other than "user"
+          is treated as an organization.
+        type: string
+        required: false
+        default: "linuxfoundation"
+      cut-off:
+        description: >
+          Minimum age a version must reach before it is eligible for deletion
+          (e.g. 30d, 4w 2d).
+        type: string
+        required: false
+        default: "30d"
+      image-tags:
+        description: >
+          Space-separated protected-tag patterns (negative patterns protect).
+          Default protects latest, development (LFX convention), v-prefixed
+          release tags, and bare semver tags. The caller's default-branch name
+          is always appended as an additional protective filter. Override for
+          repo-specific protection; the default-branch filter is still applied.
+        type: string
+        required: false
+        default: "!latest !development !v* !*.*.*"
+      dry-run:
+        description: >
+          Preview candidate deletions without deleting. Scheduled runs always
+          delete regardless of this value; all other triggers honor it.
+        type: boolean
+        required: false
+        default: true
+      enable-preview-protection:
+        description: >
+          When true, protect deploy-preview images tied to still-open pull
+          requests. Requires the caller to grant `pull-requests: read`.
+        type: boolean
+        required: false
+        default: false
+      preview-label:
+        description: "PR label identifying deploy-preview pull requests."
+        type: string
+        required: false
+        default: "deploy-preview"
+      preview-tag-prefix:
+        description: "Tag prefix for per-PR preview images (e.g. ui-pr-123)."
+        type: string
+        required: false
+        default: "ui-pr-"
+    outputs:
+      deleted-count:
+        description: "Unique package versions deleted (0 in dry-run)."
+        value: ${{ jobs.cleanup.outputs.deleted-count }}
+      would-delete-count:
+        description: "Unique versions that would be deleted (dry-run only)."
+        value: ${{ jobs.cleanup.outputs.would-delete-count }}
+      failed-count:
+        description: "Failed deletions; the run exits non-zero when > 0."
+        value: ${{ jobs.cleanup.outputs.failed-count }}
+
+permissions:
+  contents: read
+
+jobs:
+  # Preview discovery is isolated in its own job so its pull-requests: read
+  # scope is requested ONLY when preview protection is enabled. Callers that
+  # leave preview protection off skip this job entirely, so a called-workflow
+  # permission exceeding their token ceiling is never validated for them (an
+  # omitted caller scope is `none`, and a called job cannot request more than
+  # the caller granted). The cleanup job stays at packages: write for every
+  # caller and consumes this job's filters output.
+  preview-tags:
+    name: Build active preview tag filters
+    if: ${{ inputs.enable-preview-protection }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      filters: ${{ steps.preview.outputs.filters }}
+    steps:
+      # Enumerates open PRs carrying the preview label and appends per-PR
+      # protective filters so live previews are not deleted while their PR is
+      # still open. gh output is captured in a variable so set -e aborts on
+      # API/auth failure; gh api --paginate walks every page so no labeled PR
+      # is dropped by a result cap, and the label is matched via jq env (no
+      # interpolation into the query). Caller-controlled values are rejected if
+      # they contain CR/LF before the single-line GITHUB_OUTPUT write, and the
+      # caller's default-branch tag is always appended to the filter set.
+      - name: Build active preview tag filters
+        id: preview
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_TAGS: ${{ inputs.image-tags }}
+          PREVIEW_LABEL: ${{ inputs.preview-label }}
+          PREVIEW_TAG_PREFIX: ${{ inputs.preview-tag-prefix }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          reject_crlf() {
+            local name="$1"
+            local value="$2"
+            if [ "$value" != "$(printf '%s' "$value" | tr -d '\n\r')" ]; then
+              echo "${name} must not contain CR or LF." >&2
+              exit 1
+            fi
+          }
+          reject_crlf "image-tags" "${BASE_TAGS}"
+          reject_crlf "preview-label" "${PREVIEW_LABEL}"
+          reject_crlf "preview-tag-prefix" "${PREVIEW_TAG_PREFIX}"
+          reject_crlf "default-branch" "${DEFAULT_BRANCH}"
+          if [[ -z "${DEFAULT_BRANCH}" || "${DEFAULT_BRANCH}" =~ [[:space:]] ]]; then
+            echo "caller default branch must be a single non-empty token." >&2
+            exit 1
+          fi
+          filters="${BASE_TAGS}"
+          preview_prs="$(
+            gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" \
+              --jq '.[] | select(any(.labels[].name; . == env.PREVIEW_LABEL)) | .number'
+          )"
+          while IFS= read -r pr_number; do
+            [[ -n "$pr_number" ]] || continue
+            filters+=" !${PREVIEW_TAG_PREFIX}${pr_number}"
+          done <<< "${preview_prs}"
+          reject_crlf "filters" "${filters}"
+          case " ${filters} " in
+            *" !${DEFAULT_BRANCH} "*) ;;
+            *) filters="${filters} !${DEFAULT_BRANCH}" ;;
+          esac
+          printf 'filters=%s\n' "${filters}" >> "$GITHUB_OUTPUT"
+
+  cleanup:
+    name: Cleanup Stale Container Images
+    needs: [preview-tags]
+    # Run after preview discovery. Gate with !cancelled() (not always()) so a
+    # skipped preview-tags dependency still lets cleanup run, while a run being
+    # cancelled does NOT launch this destructive deletion job (always() keeps
+    # jobs running through cancellation; !cancelled() does not). The allowlist
+    # then restricts cleanup to a SUCCEEDED discovery (preview protection on) or
+    # a SKIPPED one (preview protection off); any other state (failure or any
+    # unexpected result) skips cleanup, so previews are never deleted without
+    # their protective filters.
+    if: >-
+      ${{ !cancelled()
+          && (needs.preview-tags.result == 'success'
+              || needs.preview-tags.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      # Minimal for every caller: only deletes package versions. Preview
+      # discovery (pull-requests: read) lives in the preview-tags job so this
+      # scope is never requested for preview-disabled callers.
+      packages: write
+    outputs:
+      deleted-count: ${{ steps.summary.outputs.deleted-count }}
+      would-delete-count: ${{ steps.summary.outputs.would-delete-count }}
+      failed-count: ${{ steps.summary.outputs.failed-count }}
+    env:
+      # This uses an image pinned by container digest instead of a GitHub Action
+      # `@<sha>` pin, since the official action does not pin the container image
+      # it uses internally (only the action metadata/caller script) and this
+      # container holds a token capable of deleting packages.
+      CLEANUP_IMAGE: ghcr.io/snok/container-retention-policy@sha256:884037f146d6ef574b61fbcc59bef490f887322e6b9dc2eefcf364cb4e9b4112 # 3.1.0
+      CLEANUP_LOG_NAME: container-retention-policy.log
+    steps:
+      # Fail fast before any deletion path runs. image-name must be a single
+      # exact package: no wildcard (the delete token would match too much), no
+      # list, no whitespace, no quotes, not empty. The cleanup CLI strips
+      # surrounding quotes before building matchers, so a quoted value such as
+      # "!foo" would otherwise become a negative matcher. CR/LF in other string
+      # inputs is also rejected so a malformed value cannot split a later
+      # GITHUB_OUTPUT write or CLI flag. Values are env-bound; the run body
+      # never interpolates Actions expressions.
+      - name: Validate inputs
+        env:
+          IMAGE_NAME: ${{ inputs.image-name }}
+          IMAGE_TAGS: ${{ inputs.image-tags }}
+          ACCOUNT: ${{ inputs.account }}
+          CUT_OFF: ${{ inputs.cut-off }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          reject_crlf() {
+            local name="$1"
+            local value="$2"
+            if [ "$value" != "$(printf '%s' "$value" | tr -d '\n\r')" ]; then
+              echo "${name} must not contain CR or LF." >&2
+              exit 1
+            fi
+          }
+          if [[ -z "${IMAGE_NAME//[[:space:]]/}" ]]; then
+            echo "image-name must not be empty." >&2
+            exit 1
+          fi
+          if [[ "$IMAGE_NAME" =~ [[:space:]] ]]; then
+            echo "image-name must not contain whitespace (one exact package only)." >&2
+            exit 1
+          fi
+          case "$IMAGE_NAME" in
+            *\"*|*"'"*)
+              echo "image-name must not contain quote characters." >&2
+              exit 1
+              ;;
+          esac
+          if [[ "$IMAGE_NAME" == *,* ]]; then
+            echo "image-name must be a single package, not a comma-separated list." >&2
+            exit 1
+          fi
+          if [[ "$IMAGE_NAME" == '!'* ]]; then
+            echo "image-name must not start with '!' (that is a negative matcher, not an exact name)." >&2
+            exit 1
+          fi
+          if [[ "$IMAGE_NAME" == *'*'* || "$IMAGE_NAME" == *'?'* ]]; then
+            echo "image-name must be an exact name, not a wildcard pattern ('*' or '?')." >&2
+            exit 1
+          fi
+          reject_crlf "image-tags" "${IMAGE_TAGS}"
+          reject_crlf "account" "${ACCOUNT}"
+          reject_crlf "cut-off" "${CUT_OFF}"
+          reject_crlf "default-branch" "${DEFAULT_BRANCH}"
+          if [[ -z "${DEFAULT_BRANCH}" || "${DEFAULT_BRANCH}" =~ [[:space:]] ]]; then
+            echo "caller default branch must be a single non-empty token." >&2
+            exit 1
+          fi
+          echo "Validated image-name: ${IMAGE_NAME}"
+
+      # Invoked with `docker run` rather than `uses: docker://...` so stdout can
+      # be teed for the summary step. Every CLI flag is env-bound. tag-selection
+      # =both covers tagged and untagged versions; --shas-to-skip is required by
+      # the CLI parser even when empty. GITHUB_REPOSITORY_OWNER is forwarded
+      # because the tool reads it to resolve the owner when account: user
+      # (personal accounts); without it, multi-arch child protection degrades to
+      # a coarse untagged-only safety fallback. It is ignored for org accounts.
+      # IMAGE_TAGS uses the preview-tags job's
+      # augmented filter set when preview protection is on, otherwise the base
+      # input. The caller's default-branch name is then appended unless already
+      # present, so a main (or other) default branch is never left unprotected
+      # by the development-oriented default image-tags.
+      # DRY_RUN: scheduled runs force delete; other triggers honor the input
+      # (default preview). The 'false'/'true' strings are non-empty (truthy) in
+      # GitHub expressions, so the ternary chain resolves correctly.
+      - name: Delete stale image versions
+        env:
+          RUST_LOG: container_retention_policy=INFO
+          GHCR_CLEANUP_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACCOUNT: ${{ inputs.account }}
+          IMAGE_NAME: ${{ inputs.image-name }}
+          IMAGE_TAGS: ${{ (inputs.enable-preview-protection && needs.preview-tags.outputs.filters) || inputs.image-tags }}
+          CUT_OFF: ${{ inputs.cut-off }}
+          DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || inputs.dry-run && 'true' || 'false' }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [ "${IMAGE_TAGS}" != "$(printf '%s' "${IMAGE_TAGS}" | tr -d '\n\r')" ]; then
+            echo "image-tags must not contain CR or LF." >&2
+            exit 1
+          fi
+          if [[ -z "${DEFAULT_BRANCH}" || "${DEFAULT_BRANCH}" =~ [[:space:]] ]]; then
+            echo "caller default branch must be a single non-empty token." >&2
+            exit 1
+          fi
+          case " ${IMAGE_TAGS} " in
+            *" !${DEFAULT_BRANCH} "*) ;;
+            *) IMAGE_TAGS="${IMAGE_TAGS} !${DEFAULT_BRANCH}" ;;
+          esac
+          cleanup_log="${RUNNER_TEMP}/${CLEANUP_LOG_NAME}"
+          docker pull "$CLEANUP_IMAGE"
+          docker run --rm \
+            -e RUST_LOG \
+            -e GITHUB_REPOSITORY_OWNER \
+            "$CLEANUP_IMAGE" \
+            --account="$ACCOUNT" \
+            --image-names="$IMAGE_NAME" \
+            --image-tags="$IMAGE_TAGS" \
+            --shas-to-skip= \
+            --tag-selection=both \
+            --token="$GHCR_CLEANUP_TOKEN" \
+            --cut-off="$CUT_OFF" \
+            --dry-run="$DRY_RUN" \
+            2>&1 | tee "$cleanup_log"
+
+      # Counts unique GHCR package versions from the captured log. snok v3.1.0
+      # never writes machine-readable deleted/failed outputs, so the summary
+      # parses the log. One version with several tags is several log lines; the
+      # summary counts unique version IDs, not lines. Exits non-zero on any
+      # failed deletion and exposes counts as step outputs.
+      - name: Write run summary
+        id: summary
+        if: always()
+        env:
+          TRIGGER: ${{ github.event_name }}
+          DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || inputs.dry-run && 'true' || 'false' }}
+          CUT_OFF: ${{ inputs.cut-off }}
+        run: |
+          set -euo pipefail
+          cleanup_log="${RUNNER_TEMP}/${CLEANUP_LOG_NAME}"
+          deleted=0
+          failed=0
+          would_delete=0
+          selected_tagged=
+          selected_untagged=
+          protected=
+
+          if [[ -f "$cleanup_log" ]]; then
+            stripped="${cleanup_log}.plain"
+            sed $'s/\033\\[[0-9;]*[mK]//g' "$cleanup_log" > "$stripped"
+
+            # Portable awk (no GNU 3-arg match): unique IDs, not log lines.
+            deleted="$(awk '
+              /Deleted / && match($0, /package_version_id=[0-9]+/) {
+                id = substr($0, RSTART + 19, RLENGTH - 19)
+                if (!(id in seen)) { seen[id] = 1; n++ }
+              }
+              END { print n+0 }
+            ' "$stripped")"
+
+            would_delete="$(awk '
+              /dry-run: Would have deleted/ && match($0, /package_version=[0-9]+/) {
+                id = substr($0, RSTART + 16, RLENGTH - 16)
+                if (!(id in seen)) { seen[id] = 1; n++ }
+              }
+              END { print n+0 }
+            ' "$stripped")"
+
+            failed="$(awk '
+              # Reset the per-line guard so a version-id deletion failure that
+              # also carries a task-level error substring (e.g. "...with error:
+              # Service failed to become ready: ...") is counted once, not twice.
+              { line_has_version_failure = 0 }
+              match($0, /Failed to delete package version [0-9]+/) {
+                rest = substr($0, RSTART)
+                match(rest, /[0-9]+/)
+                id = substr(rest, RSTART, RLENGTH)
+                if (!(id in seen)) { seen[id] = 1; n++ }
+                line_has_version_failure = 1
+              }
+              match($0, /Failed to create deletion URL for package .* and version [0-9]+/) {
+                rest = substr($0, RSTART)
+                match(rest, /version [0-9]+/)
+                id = substr(rest, RSTART + 8, RLENGTH - 8)
+                if (!(id in seen)) { seen[id] = 1; n++ }
+                line_has_version_failure = 1
+              }
+              /Service failed to become ready:/ {
+                if (!line_has_version_failure && !($0 in task_seen)) { task_seen[$0] = 1; task_n++ }
+              }
+              /Failed to join task:/ {
+                if (!line_has_version_failure && !($0 in task_seen)) { task_seen[$0] = 1; task_n++ }
+              }
+              END { print n + task_n + 0 }
+            ' "$stripped")"
+
+            selected_line="$(
+              grep -E 'Selected [0-9]+ tagged and [0-9]+ untagged' \
+                "$stripped" | tail -n 1 || true
+            )"
+            sel_re='Selected[[:space:]]([0-9]+)[[:space:]]tagged[[:space:]]and[[:space:]]([0-9]+)'
+            if [[ "$selected_line" =~ $sel_re ]]; then
+              selected_tagged="${BASH_REMATCH[1]}"
+              selected_untagged="${BASH_REMATCH[2]}"
+            fi
+
+            protected_line="$(
+              grep -E 'Protected [0-9]+ multi-arch child' \
+                "$stripped" | tail -n 1 || true
+            )"
+            if [[ "$protected_line" =~ Protected[[:space:]]([0-9]+)[[:space:]]multi-arch ]]; then
+              protected="${BASH_REMATCH[1]}"
+            fi
+          fi
+
+          {
+            echo "### Container image cleanup"
+            echo ""
+            echo "- Trigger: \`$TRIGGER\`"
+            echo "- Dry run: \`$DRY_RUN\`"
+            echo "- Cut-off: \`$CUT_OFF\`"
+            if [[ -n "$selected_tagged" ]]; then
+              echo "- Selected: ${selected_tagged} tagged, ${selected_untagged} untagged"
+            fi
+            if [[ -n "$protected" ]]; then
+              echo "- Protected multi-arch children: ${protected}"
+            fi
+            if [[ "$DRY_RUN" == "true" ]]; then
+              echo "- Would delete: ${would_delete} versions"
+              echo "- Deleted: 0"
+            else
+              echo "- Deleted: ${deleted} versions"
+            fi
+            echo "- Failed: ${failed}"
+            if [[ ! -f "$cleanup_log" ]]; then
+              echo "- Cleanup log: missing"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          {
+            echo "deleted-count=${deleted}"
+            echo "would-delete-count=${would_delete}"
+            echo "failed-count=${failed}"
+          } >> "$GITHUB_OUTPUT"
+
+          if [[ "$failed" -gt 0 ]]; then
+            echo "Cleanup reported ${failed} failed deletion(s)." >&2
+            exit 1
+          fi

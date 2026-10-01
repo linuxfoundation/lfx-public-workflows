@@ -4,6 +4,10 @@ The public repository for shared workflows for projects under the `linuxfoundati
 
 ## Current Workflows
 
+- **`ghcr-image-cleanup.yaml`**
+
+  Reusable workflow that prunes stale GHCR container-image versions for a single package. Consumers call it from a thin scheduled workflow. See [`docs/ghcr-image-cleanup/`](docs/ghcr-image-cleanup/index.md).
+
 - **`license-header-check.yml`**
 
   Reusable workflow for checking license headers in source code files.
