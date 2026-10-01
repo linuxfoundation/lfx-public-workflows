@@ -31,7 +31,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
       - name: Check License Headers
         env:
           EXCLUDE_PATTERN_INPUT: ${{ inputs.exclude_pattern }}
@@ -86,7 +88,8 @@ jobs:
           exclude_pattern='('
           for i in "${!base_excludes[@]}"; do
             # Escape special regex characters for literal matching
-            escaped_exclude=$(printf '%s\n' "${base_excludes[$i]}" | sed 's/[][\.*^$()+?{|]/\\&/g')
+            # shellcheck disable=SC2016  # sed replacement uses single quotes on purpose
+            escaped_exclude=$(printf "%s\n" "${base_excludes[$i]}" | sed 's/[][\.*^$()+?{|]/\\&/g')
 
             if [[ $i -eq 0 ]]; then
                 exclude_pattern="${exclude_pattern}(^|/)${escaped_exclude}(/.*|$)"

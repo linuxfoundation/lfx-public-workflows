@@ -5,8 +5,7 @@
 for LFX repos: terms we want cspell to actively reject (usually
 non-inclusive language, per the guidance at
 [inclusivenaming.org](https://inclusivenaming.org/)), each paired with
-a recommended replacement (e.g. `"master: controller, primary, main,
-leader, parent"`).
+a recommended replacement in the snippet file.
 
 Rather than copy-pasting and drifting this list across every repo's
 `.cspell.json`, repos pull it in at MegaLinter run time via

@@ -10,19 +10,23 @@ public home for reusable GitHub Actions workflows shared across projects in the
 `linuxfoundation/` GitHub org. Because it is public, its workflows can be
 referenced by both public and private consumer repositories.
 
-Everything here is a reusable workflow (`on: workflow_call`) or a composite
-action, consumed by other repositories, not an application. There is no build
-or runtime; changes are validated by static checks and by exercising the
-workflow from a consumer repository.
+This repo publishes reusable workflows (`on: workflow_call`) and composite
+actions for other repositories to consume. It is not an application. There is
+no build or runtime. The same tree also holds this repository's own CI:
+`.github/workflows/mega-linter.yml` runs on `pull_request` and is not a
+reusable workflow. Changes are validated by those static checks and by
+exercising a reusable workflow from a consumer repository.
 
 ## Repository layout
 
-Reusable workflows live in `.github/workflows/` (each triggered by
-`on: workflow_call`), and composite actions in `.github/actions/`. Repository
-owners are listed in `OWNERS.md`, with `.github/CODEOWNERS` driving automatic
-review requests. The security policy is in `SECURITY.md`, and licenses in
-`LICENSE` (MIT, source) and `LICENSE-docs` (CC-BY-4.0, documentation). The
-pinning policy is documented in the Conventions section below.
+Reusable workflows live in `.github/workflows/` and are triggered by
+`on: workflow_call`. The exception is `.github/workflows/mega-linter.yml`,
+which is this repository's CI (`on: pull_request`). Composite actions live in
+`.github/actions/`. Repository owners are listed in `OWNERS.md`, with
+`.github/CODEOWNERS` driving automatic review requests. The security policy is
+in `SECURITY.md`, and licenses in `LICENSE` (MIT, source) and `LICENSE-docs`
+(CC-BY-4.0, documentation). The pinning policy is documented in the Conventions
+section below.
 
 ## Conventions
 
@@ -42,12 +46,17 @@ reference with a trailing version comment. See
 
 ### License headers
 
-Every workflow and script file starts with:
+New LFX-owned workflow, composite action, and script files start with:
 
 ```yaml
 # Copyright The Linux Foundation and each contributor to LFX.
 # SPDX-License-Identifier: MIT
 ```
+
+Do not apply that MIT header to vendor-derived files that already carry a
+different license. `.github/actions/helm-chart-oci-publisher/action.yml` keeps
+the upstream Heimdall copyright, the LFX copyright, and
+`SPDX-License-Identifier: Apache-2.0`.
 
 Markdown files in this repo do not carry a license header (match the existing
 `README.md`, `SECURITY.md`, `OWNERS.md`).
@@ -60,6 +69,8 @@ Markdown files in this repo do not carry a license header (match the existing
   conditional job rather than requesting them unconditionally.
 - Bind inputs and context values through step-level `env:`; do not interpolate
   `${{ ... }}` inside `run:` scripts (script-injection prevention).
+- `actions/checkout` sets `persist-credentials: false` unless the job
+  genuinely needs the persisted token.
 
 ## Git workflow
 
@@ -100,12 +111,28 @@ Reference the PR or issue in the body when applicable.
 
 ## Validation
 
-There is no build. Validate workflow changes with:
+There is no build. Pull requests run MegaLinter (documentation flavor) with
+actionlint, zizmor, yamllint, markdownlint, and cspell. See
+`.github/workflows/mega-linter.yml` and `.mega-linter.yml`.
+
+MegaLinter activation is an explicit `ENABLE_LINTERS` allowlist that matches
+that advertised set. Do not use `ENABLE` with a descriptor (`REPOSITORY`,
+`SPELL`, `YAML`, `MARKDOWN`, `ACTION`): every linter in the descriptor would
+run, including ones this repo does not advertise (for example
+`REPOSITORY_SEMGREP` and `REPOSITORY_LS_LINT`). Semgrep also defaults to
+fetching its `auto` ruleset.
+
+`ACTION_DIRECTORY` is `.github` so zizmor covers reusable workflows and
+composite actions. Leave actionlint on `.github/workflows/` (it is a
+workflow linter).
+
+Locally:
 
 ```bash
-actionlint .github/workflows/<file>.yml   # workflow + embedded shell (shellcheck)
-yamllint -d relaxed .github/workflows/<file>.yml
-zizmor .github/workflows/<file>.yml       # GitHub Actions static/security analysis
+actionlint .github/workflows/<file>.yml
+yamllint -c .yamllint.yml .github .mega-linter.yml
+markdownlint -c .markdownlint.yml README.md OWNERS.md SECURITY.md
+zizmor .github
 ```
 
 For a full check, exercise the workflow from a consumer repository (for example
