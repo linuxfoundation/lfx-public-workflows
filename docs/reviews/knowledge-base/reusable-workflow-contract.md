@@ -11,8 +11,9 @@ cannot actually use.
 caller-visible output) without a matching
 `on.workflow_call.outputs.<name>` mapping.
 
-**Detect:** in a changed `.github/workflows/*.yml` that has
-`on: workflow_call`, every `jobs.*.outputs.<name>` that callers are told to
+**Detect:** in a changed `.github/workflows/*.yml` whose `on` / `"on":`
+mapping contains `workflow_call` (inline `on: workflow_call` or mapping
+`workflow_call:`), every `jobs.*.outputs.<name>` that callers are told to
 read — README, PR body, or another job in a *different* workflow via
 `needs.<caller-job>.outputs` — must have
 `on.workflow_call.outputs.<name>.value: ${{ jobs.<id>.outputs.<name> }}`.
