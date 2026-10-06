@@ -5,3 +5,6 @@
 .claude/
 .vscode/
 .idea/
+
+# MegaLinter reports
+megalinter-reports/
